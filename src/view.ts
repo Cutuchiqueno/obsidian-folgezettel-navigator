@@ -1,19 +1,34 @@
 import { ItemView, TFile, WorkspaceLeaf, setIcon } from "obsidian";
-import { buildGraph, walk } from "./graph";
+import { buildGraph, FolgezettelGraph } from "./graph";
 
 export const VIEW_TYPE_FOLGEZETTEL = "folgezettel-navigator-view";
 
 /** How many notes to show above and below the active note. */
 const MAX_STEPS = 5;
+/** Safety bound on strand-walk iterations (cycles are already guarded by `visited`). */
+const MAX_ITERATIONS = 100;
 
 type Direction = "incoming" | "outgoing";
+
+/**
+ * One rendered element of a strand: a plain note, or a junction. A junction is
+ * shown inline as a normal entry for the currently-chosen option (`selected`),
+ * marked with a branch icon; expanding it lets the reader pick another option.
+ */
+type StrandItem =
+	| { kind: "note"; file: TFile }
+	| { kind: "branch"; options: TFile[]; key: string; selected: TFile };
 
 export class FolgezettelView extends ItemView {
 	/** Live hover popover slot required by Obsidian's page-preview integration. */
 	hoverPopover: HTMLElement | null = null;
-	/** Custom hover popup used by branch indicators. */
-	private branchPopup: HTMLElement | null = null;
-	private hidePopupTimer: number | null = null;
+
+	/** Active note the current pane state belongs to; state resets when it changes. */
+	private currentPath: string | null = null;
+	/** Junction keys whose option list is expanded. */
+	private expandedBranches = new Set<string>();
+	/** Junction key -> chosen option path (overrides the mtime default). */
+	private branchSelections = new Map<string, string>();
 
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
@@ -43,13 +58,12 @@ export class FolgezettelView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
-		this.clearBranchPopup();
+		// Nothing to tear down: all DOM lives inside contentEl.
 	}
 
 	private render(): void {
 		const el = this.contentEl;
 		el.empty();
-		this.clearBranchPopup();
 
 		const active = this.app.workspace.getActiveFile();
 		if (!active || active.extension !== "md") {
@@ -57,23 +71,70 @@ export class FolgezettelView extends ItemView {
 			return;
 		}
 
+		// Navigating to a different note resets the per-note branch choices.
+		if (active.path !== this.currentPath) {
+			this.currentPath = active.path;
+			this.expandedBranches.clear();
+			this.branchSelections.clear();
+		}
+
 		const graph = buildGraph(this.app);
-		const up = walk(graph, active, "incoming", MAX_STEPS);
-		const down = walk(graph, active, "outgoing", MAX_STEPS);
+		const upItems = this.buildStrand(graph, active, "incoming");
+		const downItems = this.buildStrand(graph, active, "outgoing");
 
 		const list = el.createDiv({ cls: "folgezettel-list" });
 
-		// Top: branch indicator (if the incoming sequence forks), then ancestors
-		// ordered farthest -> nearest so reading top-to-bottom follows the sequence.
-		if (up.terminator.kind === "branch") this.renderBranch(list, up.terminator.targets, "up");
-		for (let i = up.chain.length - 1; i >= 0; i--) this.renderEntry(list, up.chain[i], "incoming");
-
-		// Center: the active note.
+		// Ancestors above, ordered farthest -> nearest so top-to-bottom follows the sequence.
+		this.renderStrand(list, upItems, "incoming", true);
 		this.renderEntry(list, active, "active");
+		// Descendants below, nearest -> farthest.
+		this.renderStrand(list, downItems, "outgoing", false);
+	}
 
-		// Bottom: descendants nearest -> farthest, then a branch indicator if it forks.
-		for (const file of down.chain) this.renderEntry(list, file, "outgoing");
-		if (down.terminator.kind === "branch") this.renderBranch(list, down.terminator.targets, "down");
+	/**
+	 * Walk the graph in one direction. Single edges are followed directly; at a
+	 * junction the strand continues along the chosen option — the reader's pick if
+	 * any, otherwise the option with the most recent file mtime.
+	 * Returns items ordered from nearest the active note to farthest.
+	 */
+	private buildStrand(graph: FolgezettelGraph, active: TFile, direction: Direction): StrandItem[] {
+		const edges = graph[direction];
+		const items: StrandItem[] = [];
+		const visited = new Set<string>([active.path]);
+		let node = active;
+		let notes = 0;
+
+		for (let i = 0; i < MAX_ITERATIONS && notes < MAX_STEPS; i++) {
+			const neighbours = edges.get(node.path) ?? [];
+			if (neighbours.length === 0) break;
+
+			let next: TFile;
+			if (neighbours.length >= 2) {
+				const key = branchKey(direction, node);
+				const stored = this.branchSelections.get(key);
+				const selected = neighbours.find((f) => f.path === stored) ?? mostRecent(neighbours);
+				items.push({ kind: "branch", options: neighbours, key, selected });
+				next = selected;
+			} else {
+				items.push({ kind: "note", file: neighbours[0] });
+				next = neighbours[0];
+			}
+
+			if (visited.has(next.path)) break;
+			visited.add(next.path);
+			notes++;
+			node = next;
+		}
+
+		return items;
+	}
+
+	private renderStrand(parent: HTMLElement, items: StrandItem[], direction: Direction, reverse: boolean): void {
+		const ordered = reverse ? [...items].reverse() : items;
+		for (const item of ordered) {
+			if (item.kind === "note") this.renderEntry(parent, item.file, direction);
+			else this.renderBranchEntry(parent, item, direction);
+		}
 	}
 
 	private renderEntry(parent: HTMLElement, file: TFile, kind: Direction | "active"): void {
@@ -87,13 +148,61 @@ export class FolgezettelView extends ItemView {
 			this.createChevron(arrow);
 		}
 
+		this.renderTitleLink(row, file);
+	}
+
+	/**
+	 * A junction, rendered inline. Collapsed it is a normal entry for the chosen
+	 * option (title opens the note); its gutter shows a branch icon instead of the
+	 * direction arrow. Clicking the branch icon expands the entry into the full
+	 * option list; picking an option collapses it and re-roots the strand.
+	 */
+	private renderBranchEntry(
+		parent: HTMLElement,
+		item: Extract<StrandItem, { kind: "branch" }>,
+		direction: Direction
+	): void {
+		const { options, key, selected } = item;
+		const expanded = this.expandedBranches.has(key);
+
+		const row = parent.createDiv({ cls: `folgezettel-entry is-branch is-${direction}${expanded ? " is-expanded" : ""}` });
+		const marker = row.createDiv({ cls: "folgezettel-marker" });
+		const toggle = marker.createDiv({ cls: "folgezettel-branch-toggle", attr: { "aria-label": "Show branches" } });
+		setIcon(toggle, "git-fork");
+		toggle.addEventListener("click", (event: MouseEvent) => {
+			event.preventDefault();
+			if (this.expandedBranches.has(key)) this.expandedBranches.delete(key);
+			else this.expandedBranches.add(key);
+			this.render();
+		});
+
+		if (!expanded) {
+			this.renderTitleLink(row, selected);
+			return;
+		}
+
+		const optionList = row.createDiv({ cls: "folgezettel-branch-options" });
+		for (const file of options) {
+			const option = optionList.createDiv({
+				cls: `folgezettel-branch-option${file.path === selected.path ? " is-selected" : ""}`,
+				text: file.basename,
+			});
+			option.addEventListener("click", () => {
+				this.branchSelections.set(key, file.path);
+				this.expandedBranches.delete(key);
+				this.render();
+			});
+		}
+	}
+
+	/** A clickable, hover-previewable note title, as used by every entry. */
+	private renderTitleLink(row: HTMLElement, file: TFile): void {
 		const link = row.createEl("a", {
 			cls: "folgezettel-title",
 			text: file.basename,
 			href: file.path,
 			attr: { "data-path": file.path },
 		});
-
 		this.attachNavigation(link, file);
 		this.attachHoverPreview(link, file);
 	}
@@ -114,20 +223,6 @@ export class FolgezettelView extends ItemView {
 			},
 		});
 		svg.createSvg("path", { attr: { d: "M3 8L12 17L21 8" } });
-	}
-
-	private renderBranch(parent: HTMLElement, targets: TFile[], direction: "up" | "down"): void {
-		const row = parent.createDiv({ cls: `folgezettel-branch is-${direction}` });
-		setIcon(row.createSpan({ cls: "folgezettel-branch-icon" }), "git-fork");
-		row.createSpan({
-			cls: "folgezettel-branch-label",
-			text: `${targets.length} ${direction === "up" ? "incoming" : "outgoing"} branches`,
-		});
-
-		row.addEventListener("mouseenter", () => this.showBranchPopup(row, targets, direction));
-		row.addEventListener("mouseleave", () => this.scheduleHidePopup());
-		// Also open the picker on click for keyboard/touch users.
-		row.addEventListener("click", () => this.showBranchPopup(row, targets, direction));
 	}
 
 	/** Click / modifier-click to open the note, matching Obsidian link behaviour. */
@@ -152,60 +247,13 @@ export class FolgezettelView extends ItemView {
 			});
 		});
 	}
+}
 
-	private showBranchPopup(anchor: HTMLElement, targets: TFile[], direction: "up" | "down"): void {
-		this.clearBranchPopup();
+function branchKey(direction: Direction, junction: TFile): string {
+	return `${direction}|${junction.path}`;
+}
 
-		const popup = document.body.createDiv({ cls: "menu folgezettel-branch-popup" });
-		for (const file of targets) {
-			const item = popup.createDiv({ cls: "menu-item" });
-			const titleEl = item.createDiv({ cls: "menu-item-title", text: file.basename });
-			item.addEventListener("click", () => {
-				this.app.workspace.getLeaf(false).openFile(file);
-				this.clearBranchPopup();
-			});
-			// Ctrl-hovering an option previews it, just like the sequence entries.
-			titleEl.addEventListener("mouseover", (event: MouseEvent) => {
-				this.app.workspace.trigger("hover-link", {
-					event,
-					source: VIEW_TYPE_FOLGEZETTEL,
-					hoverParent: this,
-					targetEl: titleEl,
-					linktext: file.path,
-					sourcePath: file.path,
-				});
-			});
-		}
-
-		// Position adjacent to the indicator, on the side the sequence continues.
-		const rect = anchor.getBoundingClientRect();
-		popup.style.left = `${rect.left}px`;
-		if (direction === "up") {
-			popup.style.top = `${rect.bottom + 2}px`;
-		} else {
-			popup.style.top = `${rect.top - popup.offsetHeight - 2}px`;
-		}
-
-		popup.addEventListener("mouseenter", () => this.cancelHidePopup());
-		popup.addEventListener("mouseleave", () => this.scheduleHidePopup());
-		this.branchPopup = popup;
-	}
-
-	private scheduleHidePopup(): void {
-		this.cancelHidePopup();
-		this.hidePopupTimer = window.setTimeout(() => this.clearBranchPopup(), 150);
-	}
-
-	private cancelHidePopup(): void {
-		if (this.hidePopupTimer !== null) {
-			window.clearTimeout(this.hidePopupTimer);
-			this.hidePopupTimer = null;
-		}
-	}
-
-	private clearBranchPopup(): void {
-		this.cancelHidePopup();
-		this.branchPopup?.remove();
-		this.branchPopup = null;
-	}
+/** The option whose note was modified most recently — the default chosen strand. */
+function mostRecent(files: TFile[]): TFile {
+	return files.reduce((a, b) => (b.stat.mtime > a.stat.mtime ? b : a));
 }

@@ -22,12 +22,13 @@ source files under `src/`, each a clear layer:
 - **`graph.ts`** — pure data layer, no DOM. `buildGraph(app)` scans every markdown
   file's `folgezettel` frontmatter property (via the metadata cache) and produces
   two adjacency maps: `outgoing` (A → its continuations) and `incoming` (the reverse
-  edges). `walk(...)` traverses one direction from a start note. Both are pure
-  functions of vault state — there is deliberately **no incremental cache**; the graph
-  is rebuilt on each render because reading the already-parsed metadata cache is cheap.
+  edges). Pure function of vault state — there is deliberately **no incremental
+  cache**; the graph is rebuilt on each render because reading the already-parsed
+  metadata cache is cheap.
 - **`view.ts`** — `FolgezettelView` (an `ItemView`). Owns all DOM and rendering (each
-  entry is a left gutter with the guide rail + direction chevron, then the title), plus
-  the branch hover-popup lifecycle.
+  entry is a left gutter with the guide rail + a direction chevron, then the title).
+  The strand traversal (`buildStrand`) lives here, not in `graph.ts`, because it
+  depends on pane-local branch state.
 - **`main.ts`** — plugin entry: registers the view type, ribbon icon, and command.
 
 ### Key model decisions (read before changing traversal/rendering)
@@ -36,13 +37,27 @@ source files under `src/`, each a clear layer:
   A's `folgezettel`). So `incoming` renders *above* the active note and `outgoing`
   renders *below* it. Do not flip these without also flipping the render order in
   `view.ts`.
-- **Junctions terminate a strand.** `walk()` stops and returns a `branch` terminator
-  the moment a note has 2+ neighbours in the walk direction; a single neighbour is
-  followed, zero ends the strand. `MAX_STEPS` (5) caps each direction. The upward chain
-  is reversed at render time so top-to-bottom reads with the sequence.
-- **Rendering is full teardown.** `render()` calls `contentEl.empty()` and rebuilds.
-  It is wired to `active-leaf-change`, `metadataCache` `resolved`, and `changed` — so
-  the panel re-centers on note switches and refreshes when links change.
+- **Junctions are followed, not stopped.** When a note has 2+ neighbours in the walk
+  direction, `buildStrand` emits a `branch` `StrandItem` and continues along the
+  chosen option — the reader's pick (`branchSelections`) if any, else the option with
+  the most recent file **mtime** (`mostRecent`). A single neighbour is followed, zero
+  ends the strand. `MAX_STEPS` (5) caps the note count per direction (branch entries
+  count). The upward chain is reversed at render time so top-to-bottom reads with the
+  sequence.
+- **Branch state is pane-local and per-note.** `expandedBranches` (which junction
+  cards are open) and `branchSelections` (junction key → chosen option path) live on
+  the view and drive `buildStrand`. They are **cleared whenever the active note
+  changes** (`currentPath` guard in `render()`) but survive metadata refreshes.
+  Junction key = `` `${direction}|${junction.path}` `` (see `branchKey`).
+- **A junction renders inline as a normal entry, not a card.** Collapsed it shows the
+  chosen option's title (click opens the note) with a fork icon in the gutter; clicking
+  the fork icon expands the entry into the full option list, and picking one collapses
+  it and re-roots the strand (it does **not** open the note). So a title click and a
+  gutter-icon click on the same entry do different things.
+- **Rendering is full teardown.** `render()` calls `contentEl.empty()` and rebuilds;
+  every interaction (expand, select) just mutates state and calls `render()`. It is
+  wired to `active-leaf-change`, `metadataCache` `resolved`, and `changed` — so the
+  panel re-centers on note switches and refreshes when links change.
 
 ### Obsidian integration points
 
@@ -53,10 +68,8 @@ source files under `src/`, each a clear layer:
   `hoverParent: this` (the view exposes a `hoverPopover` slot for it). This inherits the
   user's "hover to preview" / Ctrl-key setting for free — do not reimplement previews.
 - **Navigation:** `workspace.getLeaf(newLeaf).openFile(file)`; Ctrl/Cmd-click opens in a
-  new leaf, matching native link behavior.
-- **Branch popup** is a hand-rolled `document.body` element reusing Obsidian's `.menu` /
-  `.menu-item` classes for native styling; guard its lifecycle through
-  `clearBranchPopup()` (also called on `onClose`) to avoid leaking detached nodes.
+  new leaf, matching native link behavior. Selecting a branch option, by contrast, never
+  opens a note — it only mutates pane state and re-renders.
 
 ### Styling
 
@@ -79,4 +92,6 @@ Two non-obvious pitfalls when touching the entry markup/styling:
 
 The indentation rail is a per-entry `.folgezettel-marker::before` spanning full row
 height, so consecutive entries form one continuous line; it is hidden on the active
-(pivot) row.
+(pivot) row. A junction entry replaces the direction chevron with a `git-fork` icon
+(`.folgezettel-branch-toggle`) in the same gutter slot; when expanded, its
+`.folgezettel-branch-options` list takes the place of the title.
