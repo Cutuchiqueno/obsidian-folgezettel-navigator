@@ -25,7 +25,8 @@ source files under `src/`, each a clear layer:
   edges). `walk(...)` traverses one direction from a start note. Both are pure
   functions of vault state — there is deliberately **no incremental cache**; the graph
   is rebuilt on each render because reading the already-parsed metadata cache is cheap.
-- **`view.ts`** — `FolgezettelView` (an `ItemView`). Owns all DOM and rendering, plus
+- **`view.ts`** — `FolgezettelView` (an `ItemView`). Owns all DOM and rendering (each
+  entry is a left gutter with the guide rail + direction chevron, then the title), plus
   the branch hover-popup lifecycle.
 - **`main.ts`** — plugin entry: registers the view type, ribbon icon, and command.
 
@@ -59,6 +60,23 @@ source files under `src/`, each a clear layer:
 
 ### Styling
 
-`styles.css` sticks to Obsidian CSS variables (`--interactive-accent`, `--text-muted`,
-`--size-*`, `--radius-*`, etc.) so the panel tracks the active theme. Prefer adding a
-variable-based rule over a hard-coded color or dimension.
+The panel is deliberately modeled on the **File Explorer nav item**, so `styles.css`
+uses the same theme variables the Explorer does — `--nav-item-color`,
+`--nav-item-color-hover`, `--nav-item-background-active`, `--indentation-guide-color`,
+`--indentation-guide-width` — rather than generic accent/text tokens. Match those when
+extending it; prefer a variable-based rule over a hard-coded color or dimension.
+
+Two non-obvious pitfalls when touching the entry markup/styling:
+
+- **The chevron is the Explorer's `right-triangle` SVG, hand-built in `view.ts`
+  (`createChevron`).** `createSvg`'s `cls` must be an **array** (`["svg-icon",
+  "right-triangle"]`); a space-separated string throws (`DOMTokenList` rejects the
+  space) and silently aborts the whole render. Its stroke-width is set to `4px` in CSS
+  to match the Explorer (the default `--icon-stroke` is too thin).
+- **The title is an `<a>`,** so it inherits Obsidian's link-accent color on `:hover`.
+  `.folgezettel-title:hover` explicitly overrides `color` to `--nav-item-color-hover` to
+  keep it looking like a nav item, not a link.
+
+The indentation rail is a per-entry `.folgezettel-marker::before` spanning full row
+height, so consecutive entries form one continuous line; it is hidden on the active
+(pivot) row.
