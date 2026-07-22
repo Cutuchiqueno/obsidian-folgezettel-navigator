@@ -4,7 +4,7 @@
 	"version": "1.0.0",
 	"minAppVersion": "1.4.0",
 	"description": "Visualize and navigate a Luhmann-style Folgezettel note sequence in a sidebar panel.",
-	"author": "",
+	"author": "Niels-Oliver Walkowski",
 	"authorUrl": "",
 	"isDesktopOnly": false
 }
