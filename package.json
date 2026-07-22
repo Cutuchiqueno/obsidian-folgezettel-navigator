@@ -1,0 +1,26 @@
+{
+	"name": "folgezettel-navigator",
+	"version": "1.0.0",
+	"description": "Visualize and navigate a Luhmann-style Folgezettel note sequence in a sidebar panel.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"version": "node version-bump.mjs && git add manifest.json versions.json"
+	},
+	"keywords": [
+		"obsidian",
+		"zettelkasten",
+		"folgezettel",
+		"luhmann"
+	],
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^20.11.0",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "0.20.0",
+		"obsidian": "latest",
+		"tslib": "2.6.2",
+		"typescript": "5.3.3"
+	}
+}

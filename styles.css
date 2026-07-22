@@ -1,0 +1,108 @@
+.folgezettel-view {
+	padding: var(--size-4-3);
+	overflow-y: auto;
+}
+
+.folgezettel-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	text-align: center;
+	padding: var(--size-4-4) var(--size-4-2);
+}
+
+.folgezettel-list {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+}
+
+/* A note in the sequence. */
+.folgezettel-entry {
+	display: flex;
+	justify-content: center;
+	position: relative;
+	padding: var(--size-2-2) 0;
+}
+
+/* Vertical connector between consecutive entries. */
+.folgezettel-entry:not(:first-child)::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 50%;
+	width: 2px;
+	height: var(--size-2-2);
+	background-color: var(--background-modifier-border);
+	transform: translateX(-50%);
+}
+
+.folgezettel-link {
+	display: inline-block;
+	max-width: 100%;
+	padding: var(--size-2-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	text-align: center;
+	text-decoration: none;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+
+.folgezettel-link:hover {
+	background-color: var(--background-modifier-hover);
+	text-decoration: none;
+}
+
+/* The active (center) note stands out. */
+.folgezettel-entry.is-active .folgezettel-link {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: var(--font-semibold);
+}
+
+.folgezettel-entry.is-incoming .folgezettel-link,
+.folgezettel-entry.is-outgoing .folgezettel-link {
+	color: var(--text-muted);
+}
+
+/* Branch (junction) indicator. */
+.folgezettel-branch {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--size-2-2);
+	padding: var(--size-2-2) var(--size-4-2);
+	margin: var(--size-2-1) auto;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+.folgezettel-branch:hover {
+	color: var(--text-normal);
+	border-color: var(--interactive-accent);
+	background-color: var(--background-modifier-hover);
+}
+
+.folgezettel-branch-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.folgezettel-branch-icon svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
+/* Hover popup listing the branch targets. Reuses Obsidian's .menu styling. */
+.folgezettel-branch-popup {
+	position: fixed;
+	z-index: var(--layer-menu);
+	min-width: 150px;
+	max-width: 320px;
+}

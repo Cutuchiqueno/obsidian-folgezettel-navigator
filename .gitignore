@@ -1,0 +1,12 @@
+# build / dependencies
+node_modules/
+main.js
+*.js.map
+
+# obsidian
+.obsidian/
+data.json
+
+# os / editor
+.DS_Store
+.idea/

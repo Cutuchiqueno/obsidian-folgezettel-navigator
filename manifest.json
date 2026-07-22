@@ -1,0 +1,10 @@
+{
+	"id": "folgezettel-navigator",
+	"name": "Folgezettel Navigator",
+	"version": "1.0.0",
+	"minAppVersion": "1.4.0",
+	"description": "Visualize and navigate a Luhmann-style Folgezettel note sequence in a sidebar panel.",
+	"author": "",
+	"authorUrl": "",
+	"isDesktopOnly": false
+}
