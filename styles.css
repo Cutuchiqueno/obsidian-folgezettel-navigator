@@ -16,28 +16,76 @@
 	align-items: stretch;
 }
 
-/* A note in the sequence. */
+/* A note in the sequence — modeled on the File Explorer nav item. */
 .folgezettel-entry {
-	position: relative;
-	padding: var(--size-2-2) 0;
+	display: flex;
+	align-items: stretch;
+	border-radius: var(--radius-s);
+	color: var(--nav-item-color);
 }
 
-/* Vertical connector between consecutive entries, aligned to the title's left edge. */
-.folgezettel-entry:not(:first-child)::before {
+.folgezettel-entry:hover {
+	background-color: var(--nav-item-background-hover);
+	color: var(--nav-item-color-hover);
+}
+
+/* Active (center) note: same selection background as the Explorer, not bold. */
+.folgezettel-entry.is-active {
+	background-color: var(--nav-item-background-active);
+	color: var(--nav-item-color-active);
+}
+
+/* Left gutter: the indentation guide rail plus the direction arrow. */
+.folgezettel-marker {
+	position: relative;
+	flex: 0 0 auto;
+	width: var(--size-4-6);
+}
+
+/* Continuous vertical guide connecting the entries, as in the Explorer. */
+.folgezettel-marker::before {
 	content: "";
 	position: absolute;
 	top: 0;
-	left: var(--size-4-2);
-	width: 2px;
-	height: var(--size-2-2);
-	background-color: var(--background-modifier-border);
+	bottom: 0;
+	left: 50%;
+	width: var(--indentation-guide-width);
+	background-color: var(--indentation-guide-color);
+	transform: translateX(-50%);
 }
 
-.folgezettel-link {
-	display: block;
-	padding: var(--size-2-1) var(--size-4-2);
-	border-radius: var(--radius-s);
-	color: var(--text-normal);
+/* The active note is the pivot — no guide runs through its highlighted row. */
+.folgezettel-entry.is-active .folgezettel-marker::before {
+	display: none;
+}
+
+/* Up/down collapse-triangle sitting on the rail (up = incoming, down = outgoing). */
+.folgezettel-arrow {
+	position: absolute;
+	top: var(--size-2-2);
+	left: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--nav-collapse-icon-color, var(--text-faint));
+	transform: translateX(-50%);
+}
+
+.folgezettel-arrow.is-up {
+	transform: translateX(-50%) rotate(180deg);
+}
+
+.folgezettel-arrow .svg-icon {
+	width: 10px;
+	height: 10px;
+	stroke-width: 4px;
+}
+
+.folgezettel-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding: var(--size-2-2) var(--size-2-2) var(--size-2-2) 0;
+	color: inherit;
 	font-size: var(--font-ui-small);
 	line-height: var(--line-height-tight);
 	text-align: left;
@@ -46,21 +94,9 @@
 	cursor: pointer;
 }
 
-.folgezettel-link:hover {
-	background-color: var(--background-modifier-hover);
+.folgezettel-title:hover {
+	color: var(--nav-item-color-hover);
 	text-decoration: none;
-}
-
-/* The active (center) note stands out. */
-.folgezettel-entry.is-active .folgezettel-link {
-	background-color: var(--interactive-accent);
-	color: var(--text-on-accent);
-	font-weight: var(--font-semibold);
-}
-
-.folgezettel-entry.is-incoming .folgezettel-link,
-.folgezettel-entry.is-outgoing .folgezettel-link {
-	color: var(--text-muted);
 }
 
 /* Branch (junction) indicator. */

@@ -78,8 +78,17 @@ export class FolgezettelView extends ItemView {
 
 	private renderEntry(parent: HTMLElement, file: TFile, kind: Direction | "active"): void {
 		const row = parent.createDiv({ cls: `folgezettel-entry is-${kind}` });
+
+		// Left gutter carries the indentation guide rail and a direction arrow,
+		// mirroring the File Explorer's collapse-triangle column.
+		const marker = row.createDiv({ cls: "folgezettel-marker" });
+		if (kind !== "active") {
+			const arrow = marker.createDiv({ cls: `folgezettel-arrow is-${kind === "incoming" ? "up" : "down"}` });
+			this.createChevron(arrow);
+		}
+
 		const link = row.createEl("a", {
-			cls: "folgezettel-link",
+			cls: "folgezettel-title",
 			text: file.basename,
 			href: file.path,
 			attr: { "data-path": file.path },
@@ -87,6 +96,24 @@ export class FolgezettelView extends ItemView {
 
 		this.attachNavigation(link, file);
 		this.attachHoverPreview(link, file);
+	}
+
+	/** Recreate the File Explorer's `right-triangle` collapse icon (rotated via CSS). */
+	private createChevron(parent: HTMLElement): void {
+		const svg = parent.createSvg("svg", {
+			cls: ["svg-icon", "right-triangle"],
+			attr: {
+				viewBox: "0 0 24 24",
+				width: "24",
+				height: "24",
+				fill: "none",
+				stroke: "currentColor",
+				"stroke-width": "2",
+				"stroke-linecap": "round",
+				"stroke-linejoin": "round",
+			},
+		});
+		svg.createSvg("path", { attr: { d: "M3 8L12 17L21 8" } });
 	}
 
 	private renderBranch(parent: HTMLElement, targets: TFile[], direction: "up" | "down"): void {
