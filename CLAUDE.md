@@ -49,11 +49,12 @@ source files under `src/`, each a clear layer:
   the view and drive `buildStrand`. They are **cleared whenever the active note
   changes** (`currentPath` guard in `render()`) but survive metadata refreshes.
   Junction key = `` `${direction}|${junction.path}` `` (see `branchKey`).
-- **A junction renders inline as a normal entry, not a card.** Collapsed it shows the
-  chosen option's title (click opens the note) with a fork icon in the gutter; clicking
-  the fork icon expands the entry into the full option list, and picking one collapses
-  it and re-roots the strand (it does **not** open the note). So a title click and a
-  gutter-icon click on the same entry do different things.
+- **A junction renders inline as a normal entry when collapsed.** It shows the chosen
+  option's title (click opens the note) with a fork icon in the gutter; clicking the
+  fork icon expands the entry into the full option list (a card — see Styling), the
+  **chosen option first, not emphasised**, and picking one collapses it and re-roots the
+  strand (it does **not** open the note). So a title click and a gutter-icon click on
+  the same entry do different things.
 - **Rendering is full teardown.** `render()` calls `contentEl.empty()` and rebuilds;
   every interaction (expand, select) just mutates state and calls `render()`. It is
   wired to `active-leaf-change`, `metadataCache` `resolved`, and `changed` — so the
@@ -94,4 +95,6 @@ The indentation rail is a per-entry `.folgezettel-marker::before` spanning full 
 height, so consecutive entries form one continuous line; it is hidden on the active
 (pivot) row. A junction entry replaces the direction chevron with a `git-fork` icon
 (`.folgezettel-branch-toggle`) in the same gutter slot; when expanded, its
-`.folgezettel-branch-options` list takes the place of the title.
+`.folgezettel-branch-options` list takes the place of the title, styled to mirror
+Obsidian's search-result preview (`.search-result-file-matches` — `--search-result-background`,
+a `box-shadow` border ring, options divided by `border-bottom`).

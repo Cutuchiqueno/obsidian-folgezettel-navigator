@@ -181,12 +181,11 @@ export class FolgezettelView extends ItemView {
 			return;
 		}
 
+		// The current choice leads the list; the rest keep their declared order.
+		const ordered = [selected, ...options.filter((f) => f.path !== selected.path)];
 		const optionList = row.createDiv({ cls: "folgezettel-branch-options" });
-		for (const file of options) {
-			const option = optionList.createDiv({
-				cls: `folgezettel-branch-option${file.path === selected.path ? " is-selected" : ""}`,
-				text: file.basename,
-			});
+		for (const file of ordered) {
+			const option = optionList.createDiv({ cls: "folgezettel-branch-option", text: file.basename });
 			option.addEventListener("click", () => {
 				this.branchSelections.set(key, file.path);
 				this.expandedBranches.delete(key);
