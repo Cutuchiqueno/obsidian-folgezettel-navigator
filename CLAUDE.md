@@ -91,10 +91,18 @@ Two non-obvious pitfalls when touching the entry markup/styling:
   `.folgezettel-title:hover` explicitly overrides `color` to `--nav-item-color-hover` to
   keep it looking like a nav item, not a link.
 
-The indentation rail is a per-entry `.folgezettel-marker::before` spanning full row
-height, so consecutive entries form one continuous line; it is hidden on the active
-(pivot) row. A junction entry replaces the direction chevron with a `git-fork` icon
+The indentation rail is drawn per entry as **two** guide segments,
+`.folgezettel-marker::before` (above the icon) and `::after` (below), which stop
+`--fz-rail-gap` short of the gutter icon so the line never touches it — as the Explorer
+clears its collapse triangles. The gap is anchored to `--fz-icon-top` / `--fz-icon-size`
+(marker-scoped custom properties; the branch marker overrides `--fz-icon-size` to `14px`
+for the larger fork). Consecutive entries' segments meet at the row boundary to read as
+one line; both segments are hidden on the active (pivot) row.
+
+A junction entry replaces the direction chevron with a `git-fork` icon
 (`.folgezettel-branch-toggle`) in the same gutter slot; when expanded, its
 `.folgezettel-branch-options` list takes the place of the title, styled to mirror
 Obsidian's search-result preview (`.search-result-file-matches` — `--search-result-background`,
-a `box-shadow` border ring, options divided by `border-bottom`).
+a `box-shadow` border ring, options divided by `border-bottom`). When such an expanded
+card sits directly next to the active row, an adjacent-sibling rule adds a small
+`margin-top` so its filled background does not butt against the active row's.

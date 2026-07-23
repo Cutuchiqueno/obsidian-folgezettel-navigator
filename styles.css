@@ -35,34 +35,51 @@
 	color: var(--nav-item-color-active);
 }
 
-/* Left gutter: the indentation guide rail plus the direction arrow. */
+/* Left gutter: the indentation guide rail plus the direction arrow.
+   --fz-icon-top / --fz-icon-size locate the gutter icon; the rail is split
+   into two segments so it stops short of the icon (a gap either side), the
+   way the Explorer's guides clear their collapse triangles. */
 .folgezettel-marker {
+	--fz-icon-top: var(--size-2-3);
+	--fz-icon-size: 10px;
+	--fz-rail-gap: var(--size-2-1);
 	position: relative;
 	flex: 0 0 auto;
 	width: var(--size-4-6);
 }
 
-/* Continuous vertical guide connecting the entries, as in the Explorer. */
-.folgezettel-marker::before {
+.folgezettel-marker::before,
+.folgezettel-marker::after {
 	content: "";
 	position: absolute;
-	top: 0;
-	bottom: 0;
 	left: 50%;
 	width: var(--indentation-guide-width);
 	background-color: var(--indentation-guide-color);
 	transform: translateX(-50%);
 }
 
+/* Guide segment above the icon. */
+.folgezettel-marker::before {
+	top: 0;
+	height: calc(var(--fz-icon-top) - var(--fz-rail-gap));
+}
+
+/* Guide segment below the icon. */
+.folgezettel-marker::after {
+	top: calc(var(--fz-icon-top) + var(--fz-icon-size) + var(--fz-rail-gap));
+	bottom: 0;
+}
+
 /* The active note is the pivot — no guide runs through its highlighted row. */
-.folgezettel-entry.is-active .folgezettel-marker::before {
+.folgezettel-entry.is-active .folgezettel-marker::before,
+.folgezettel-entry.is-active .folgezettel-marker::after {
 	display: none;
 }
 
 /* Up/down collapse-triangle sitting on the rail (up = incoming, down = outgoing). */
 .folgezettel-arrow {
 	position: absolute;
-	top: var(--size-2-2);
+	top: var(--fz-icon-top);
 	left: 50%;
 	display: flex;
 	align-items: center;
@@ -84,7 +101,7 @@
 .folgezettel-title {
 	flex: 1 1 auto;
 	min-width: 0;
-	padding: var(--size-2-2) var(--size-2-2) var(--size-2-2) 0;
+	padding: var(--size-2-3) var(--size-2-2) var(--size-2-3) 0;
 	color: inherit;
 	font-size: var(--font-ui-small);
 	line-height: var(--line-height-tight);
@@ -100,10 +117,14 @@
 }
 
 /* A junction entry: the gutter shows a branch icon (click to expand/collapse)
-   instead of the direction arrow. */
+   instead of the direction arrow. The icon is larger, so widen the rail gap. */
+.folgezettel-entry.is-branch .folgezettel-marker {
+	--fz-icon-size: 14px;
+}
+
 .folgezettel-branch-toggle {
 	position: absolute;
-	top: var(--size-2-2);
+	top: var(--fz-icon-top);
 	left: 50%;
 	display: flex;
 	align-items: center;
@@ -150,4 +171,11 @@
 
 .folgezettel-branch-option:hover {
 	background-color: var(--background-modifier-hover);
+}
+
+/* When an expanded card abuts the active note, its filled background nearly
+   touches the active row's; add a little breathing room between the two. */
+.folgezettel-entry.is-active + .folgezettel-entry.is-branch.is-expanded,
+.folgezettel-entry.is-branch.is-expanded + .folgezettel-entry.is-active {
+	margin-top: var(--size-2-2);
 }
