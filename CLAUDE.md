@@ -40,6 +40,14 @@ source files under `src/`, each a clear layer:
   A's `folgezettel`). So `incoming` renders *above* the active note and `outgoing`
   renders *below* it. Do not flip these without also flipping the render order in
   `view.ts`.
+- **Active note pinned to the vertical centre.** The list is a flex column of three
+  parts: an incoming region (`flex: 1`, bottom-anchored via `justify-content:
+  flex-end`), the active entry (`flex: 0 0 auto`), and an outgoing region (`flex: 1`,
+  top-anchored). Each region grows *outward* from the active note and clips at its far
+  end (`overflow: hidden`, so tall strands are cut off, not scrolled). This is not just
+  cosmetic: because every continuation grows away from the active note, a hovered branch
+  card never shifts under the cursor — the precondition that lets the outgoing hover
+  preview work, and that the (still unbuilt) incoming preview will rely on.
 - **Junctions are followed, not stopped.** When a note has 2+ neighbours in the walk
   direction, a `branch` entry is emitted and the strand continues along the chosen
   option — the reader's pick (`branchSelections`) if any, else the option with the most
@@ -119,6 +127,9 @@ a `box-shadow` border ring, options divided by `border-bottom`). When such an ex
 card sits directly next to the active row, an adjacent-sibling rule adds a small
 `margin-top` so its filled background does not butt against the active row's.
 
-Each outgoing junction's continuation is wrapped in a `.folgezettel-continuation`
-element set to `display: contents` (layout-transparent), so a hover preview can rebuild
-just that subtree without perturbing the sequence's flex layout.
+The list splits into `.folgezettel-region.is-incoming` / `.is-outgoing` (each `flex: 1`,
+`overflow: hidden`) with the active entry between them, so the active note stays
+vertically centred (see "Active note pinned to the vertical centre"). Each outgoing
+junction's continuation is wrapped in a `.folgezettel-continuation` element set to
+`display: contents` (layout-transparent), so a hover preview can rebuild just that
+subtree without perturbing the sequence's flex layout.

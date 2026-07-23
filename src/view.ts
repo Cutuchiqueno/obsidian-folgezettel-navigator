@@ -102,12 +102,20 @@ export class FolgezettelView extends ItemView {
 
 		const list = el.createDiv({ cls: "folgezettel-list" });
 
+		// Active note pinned to the vertical centre; each side grows outward from it
+		// (incoming upward, outgoing downward). Because a junction's continuation always
+		// grows away from the active note, a hover preview never shifts the card the
+		// cursor sits on — the reason this layout is needed for the incoming preview.
+		const incomingEl = list.createDiv({ cls: "folgezettel-region is-incoming" });
 		// Ancestors above, ordered farthest -> nearest so top-to-bottom follows the sequence.
-		this.renderStrand(list, upItems, "incoming", true);
+		this.renderStrand(incomingEl, upItems, "incoming", true);
+
 		this.renderEntry(list, active, "active");
+
+		const outgoingEl = list.createDiv({ cls: "folgezettel-region is-outgoing" });
 		// Descendants below — walked and rendered together so each junction's
 		// continuation gets its own container that hover previews can rebuild in place.
-		this.renderOutgoing(list, active, new Set<string>([active.path]), MAX_STEPS);
+		this.renderOutgoing(outgoingEl, active, new Set<string>([active.path]), MAX_STEPS);
 	}
 
 	/**
