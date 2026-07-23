@@ -66,13 +66,12 @@
 	color: var(--nav-item-color-active);
 }
 
-/* Left gutter: the indentation guide rail plus the direction arrow.
+/* Left gutter: the indentation guide rail plus the note dot.
    --fz-icon-top / --fz-icon-size locate the gutter icon; the rail is split
    into two segments so it stops short of the icon (a gap either side), the
    way the Explorer's guides clear their collapse triangles. */
 .folgezettel-marker {
-	--fz-icon-top: var(--size-2-3);
-	--fz-icon-size: 10px;
+	--fz-icon-size: 8px;
 	--fz-rail-gap: var(--size-2-1);
 	position: relative;
 	flex: 0 0 auto;
@@ -89,15 +88,16 @@
 	transform: translateX(-50%);
 }
 
-/* Guide segment above the icon. */
+/* The icon sits at the entry's vertical centre; the rail stops a gap short of it
+   on each side (50% ± half the icon ± the gap), so it stays centred however many
+   lines the title wraps to. */
 .folgezettel-marker::before {
 	top: 0;
-	height: calc(var(--fz-icon-top) - var(--fz-rail-gap));
+	height: calc(50% - var(--fz-icon-size) / 2 - var(--fz-rail-gap));
 }
 
-/* Guide segment below the icon. */
 .folgezettel-marker::after {
-	top: calc(var(--fz-icon-top) + var(--fz-icon-size) + var(--fz-rail-gap));
+	top: calc(50% + var(--fz-icon-size) / 2 + var(--fz-rail-gap));
 	bottom: 0;
 }
 
@@ -107,32 +107,27 @@
 	display: none;
 }
 
-/* Up/down collapse-triangle sitting on the rail (up = incoming, down = outgoing). */
-.folgezettel-arrow {
+/* Filled dot sitting on the rail: muted for sequence notes, accent for the
+   active (pivot) note. */
+.folgezettel-dot {
 	position: absolute;
-	top: var(--fz-icon-top);
+	top: 50%;
 	left: 50%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: var(--nav-collapse-icon-color, var(--text-faint));
-	transform: translateX(-50%);
+	width: var(--fz-icon-size);
+	height: var(--fz-icon-size);
+	border-radius: 50%;
+	background-color: var(--nav-item-color);
+	transform: translate(-50%, -50%);
 }
 
-.folgezettel-arrow.is-up {
-	transform: translateX(-50%) rotate(180deg);
-}
-
-.folgezettel-arrow .svg-icon {
-	width: 10px;
-	height: 10px;
-	stroke-width: 4px;
+.folgezettel-entry.is-active .folgezettel-dot {
+	background-color: var(--interactive-accent);
 }
 
 .folgezettel-title {
 	flex: 1 1 auto;
 	min-width: 0;
-	padding: var(--size-2-3) var(--size-2-2) var(--size-2-3) 0;
+	padding: var(--size-2-3) var(--size-2-2) var(--size-2-3) var(--size-2-2);
 	color: inherit;
 	font-size: var(--font-ui-small);
 	line-height: var(--line-height-tight);
@@ -155,13 +150,13 @@
 
 .folgezettel-branch-toggle {
 	position: absolute;
-	top: var(--fz-icon-top);
+	top: 50%;
 	left: 50%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	color: var(--text-muted);
-	transform: translateX(-50%);
+	transform: translate(-50%, -50%);
 	cursor: pointer;
 }
 

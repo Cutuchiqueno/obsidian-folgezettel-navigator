@@ -26,7 +26,7 @@ source files under `src/`, each a clear layer:
   cache**; the graph is rebuilt on each render because reading the already-parsed
   metadata cache is cheap.
 - **`view.ts`** — `FolgezettelView` (an `ItemView`). Owns all DOM and rendering (each
-  entry is a left gutter with the guide rail + a direction chevron, then the title).
+  entry is a left gutter with the guide rail + a dot, then the title).
   Strand traversal lives here, not in `graph.ts`, because it depends on pane-local
   branch state. Both sides are walked *and* rendered together by `renderStrand(parent,
   from, direction, visited, budget)`, emitting entries nearest → farthest; at a junction
@@ -104,27 +104,26 @@ uses the same theme variables the Explorer does — `--nav-item-color`,
 `--indentation-guide-width` — rather than generic accent/text tokens. Match those when
 extending it; prefer a variable-based rule over a hard-coded color or dimension.
 
-Two non-obvious pitfalls when touching the entry markup/styling:
+Non-obvious pitfall when touching the entry markup/styling:
 
-- **The chevron is the Explorer's `right-triangle` SVG, hand-built in `view.ts`
-  (`createChevron`).** `createSvg`'s `cls` must be an **array** (`["svg-icon",
-  "right-triangle"]`); a space-separated string throws (`DOMTokenList` rejects the
-  space) and silently aborts the whole render. Its stroke-width is set to `4px` in CSS
-  to match the Explorer (the default `--icon-stroke` is too thin).
 - **The title is an `<a>`,** so it inherits Obsidian's link-accent color on `:hover`.
   `.folgezettel-title:hover` explicitly overrides `color` to `--nav-item-color-hover` to
   keep it looking like a nav item, not a link.
 
-The indentation rail is drawn per entry as **two** guide segments,
-`.folgezettel-marker::before` (above the icon) and `::after` (below), which stop
-`--fz-rail-gap` short of the gutter icon so the line never touches it — as the Explorer
-clears its collapse triangles. The gap is anchored to `--fz-icon-top` / `--fz-icon-size`
-(marker-scoped custom properties; the branch marker overrides `--fz-icon-size` to `14px`
-for the larger fork). Consecutive entries' segments meet at the row boundary to read as
-one line; both segments are hidden on the active (pivot) row.
+A sequence note shows a filled dot (`.folgezettel-dot`) in the gutter — `--nav-item-color`
+(the muted title gray) for sequence notes, `--interactive-accent` for the active (pivot)
+note. The gutter icon sits at the entry's **vertical centre** (`top: 50%`); the marker is
+`align-items: stretch`, so it spans the entry's full height and the icon stays centred
+however many lines the title wraps to (the title's small left padding sets the
+gutter-to-text gap). The indentation rail is drawn per entry as **two** guide segments,
+`.folgezettel-marker::before` (above the icon) and `::after` (below), each stopping
+`--fz-rail-gap` short of the icon — `50% ∓ (--fz-icon-size / 2 + --fz-rail-gap)` — so the
+line never touches it. `--fz-icon-size` is `8px` for the dot, overridden to `14px` on the
+branch marker for the larger fork. Consecutive entries' segments meet at the row boundary
+to read as one line; both segments are hidden on the active (pivot) row.
 
-A junction entry replaces the direction chevron with a `git-fork` icon
-(`.folgezettel-branch-toggle`) in the same gutter slot; when expanded, its
+A junction entry uses a `git-fork` icon (`.folgezettel-branch-toggle`) in the gutter slot
+instead of the dot; when expanded, its
 `.folgezettel-branch-options` list takes the place of the title, styled to mirror
 Obsidian's search-result preview (`.search-result-file-matches` — `--search-result-background`,
 a `box-shadow` border ring, options divided by `border-bottom`). When the entry nearest
