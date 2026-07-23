@@ -27,8 +27,11 @@ source files under `src/`, each a clear layer:
   metadata cache is cheap.
 - **`view.ts`** — `FolgezettelView` (an `ItemView`). Owns all DOM and rendering (each
   entry is a left gutter with the guide rail + a direction chevron, then the title).
-  The strand traversal (`buildStrand`) lives here, not in `graph.ts`, because it
-  depends on pane-local branch state.
+  Strand traversal lives here, not in `graph.ts`, because it depends on pane-local
+  branch state. The **incoming** side is computed by `buildStrand` then rendered; the
+  **outgoing** side is walked *and* rendered together by `renderOutgoing`, so each
+  junction's continuation gets its own container that a hover preview can rebuild in
+  place (see below).
 - **`main.ts`** — plugin entry: registers the view type, ribbon icon, and command.
 
 ### Key model decisions (read before changing traversal/rendering)
@@ -38,12 +41,11 @@ source files under `src/`, each a clear layer:
   renders *below* it. Do not flip these without also flipping the render order in
   `view.ts`.
 - **Junctions are followed, not stopped.** When a note has 2+ neighbours in the walk
-  direction, `buildStrand` emits a `branch` `StrandItem` and continues along the
-  chosen option — the reader's pick (`branchSelections`) if any, else the option with
-  the most recent file **mtime** (`mostRecent`). A single neighbour is followed, zero
-  ends the strand. `MAX_STEPS` (5) caps the note count per direction (branch entries
-  count). The upward chain is reversed at render time so top-to-bottom reads with the
-  sequence.
+  direction, a `branch` entry is emitted and the strand continues along the chosen
+  option — the reader's pick (`branchSelections`) if any, else the option with the most
+  recent file **mtime** (`mostRecent`). A single neighbour is followed, zero ends the
+  strand. `MAX_STEPS` (5) caps the note count per direction (branch entries count). The
+  upward chain is reversed at render time so top-to-bottom reads with the sequence.
 - **Branch state is pane-local and per-note.** `expandedBranches` (which junction
   cards are open) and `branchSelections` (junction key → chosen option path) live on
   the view and drive `buildStrand`. They are **cleared whenever the active note
@@ -55,10 +57,20 @@ source files under `src/`, each a clear layer:
   **chosen option first, not emphasised**, and picking one collapses it and re-roots the
   strand (it does **not** open the note). So a title click and a gutter-icon click on
   the same entry do different things.
-- **Rendering is full teardown.** `render()` calls `contentEl.empty()` and rebuilds;
-  every interaction (expand, select) just mutates state and calls `render()`. It is
-  wired to `active-leaf-change`, `metadataCache` `resolved`, and `changed` — so the
-  panel re-centers on note switches and refreshes when links change.
+- **Outgoing hover preview is a partial rebuild — never route it through `render()`.**
+  Hovering an option in an expanded *outgoing* card sets `previewBranch` and reroutes
+  that junction's continuation to the hovered option via `renderContinuation(key)`,
+  which re-empties **only** that junction's continuation container (tracked in
+  `branchContinuations`) and leaves the card — and the option under the cursor —
+  untouched. A full `render()` here tears down the hovered element and thrashes
+  mouseenter/mouseleave (empirically ~19 renders + a stuck preview), which is exactly
+  the bug this design avoids. The card's option order never changes during preview
+  (chosen option stays first). Incoming previews are deliberately not implemented yet.
+- **Rendering is otherwise full teardown.** `render()` calls `contentEl.empty()` and
+  rebuilds; expand/select/navigation mutate state and call `render()` (hover preview is
+  the lone exception, above). It is wired to `active-leaf-change`, `metadataCache`
+  `resolved`, and `changed` — so the panel re-centers on note switches and refreshes
+  when links change.
 
 ### Obsidian integration points
 
@@ -106,3 +118,7 @@ Obsidian's search-result preview (`.search-result-file-matches` — `--search-re
 a `box-shadow` border ring, options divided by `border-bottom`). When such an expanded
 card sits directly next to the active row, an adjacent-sibling rule adds a small
 `margin-top` so its filled background does not butt against the active row's.
+
+Each outgoing junction's continuation is wrapped in a `.folgezettel-continuation`
+element set to `display: contents` (layout-transparent), so a hover preview can rebuild
+just that subtree without perturbing the sequence's flex layout.

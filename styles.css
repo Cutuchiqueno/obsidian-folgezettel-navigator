@@ -16,6 +16,12 @@
 	align-items: stretch;
 }
 
+/* Layout-transparent wrapper: a junction's continuation lives here so hover
+   previews can rebuild it without disturbing the sequence's flex layout. */
+.folgezettel-continuation {
+	display: contents;
+}
+
 /* A note in the sequence — modeled on the File Explorer nav item. */
 .folgezettel-entry {
 	display: flex;

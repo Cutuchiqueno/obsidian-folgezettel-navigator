@@ -29,6 +29,23 @@ export class FolgezettelView extends ItemView {
 	private expandedBranches = new Set<string>();
 	/** Junction key -> chosen option path (overrides the mtime default). */
 	private branchSelections = new Map<string, string>();
+	/**
+	 * Transient hover preview: while the mouse is over an option in an expanded
+	 * (outgoing) branch card, the strand continues from that option instead of the
+	 * stored selection — without reordering the card. Cleared on mouse-out / action.
+	 */
+	private previewBranch: { key: string; path: string } | null = null;
+	/** Cached graph for the current render, reused by on-hover continuation rebuilds. */
+	private graph: FolgezettelGraph | null = null;
+	/**
+	 * Per outgoing-junction handle to the DOM container holding everything below its
+	 * card, plus the state needed to re-walk it — so a hover preview rebuilds only
+	 * that subtree and never the card the cursor sits on.
+	 */
+	private branchContinuations = new Map<
+		string,
+		{ container: HTMLElement; options: TFile[]; visited: Set<string>; budget: number }
+	>();
 
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
@@ -76,25 +93,83 @@ export class FolgezettelView extends ItemView {
 			this.currentPath = active.path;
 			this.expandedBranches.clear();
 			this.branchSelections.clear();
+			this.previewBranch = null;
 		}
 
-		const graph = buildGraph(this.app);
-		const upItems = this.buildStrand(graph, active, "incoming");
-		const downItems = this.buildStrand(graph, active, "outgoing");
+		this.graph = buildGraph(this.app);
+		this.branchContinuations.clear();
+		const upItems = this.buildStrand(this.graph, active, "incoming");
 
 		const list = el.createDiv({ cls: "folgezettel-list" });
 
 		// Ancestors above, ordered farthest -> nearest so top-to-bottom follows the sequence.
 		this.renderStrand(list, upItems, "incoming", true);
 		this.renderEntry(list, active, "active");
-		// Descendants below, nearest -> farthest.
-		this.renderStrand(list, downItems, "outgoing", false);
+		// Descendants below — walked and rendered together so each junction's
+		// continuation gets its own container that hover previews can rebuild in place.
+		this.renderOutgoing(list, active, new Set<string>([active.path]), MAX_STEPS);
 	}
 
 	/**
-	 * Walk the graph in one direction. Single edges are followed directly; at a
-	 * junction the strand continues along the chosen option — the reader's pick if
-	 * any, otherwise the option with the most recent file mtime.
+	 * Walk and render the outgoing strand from `from`. At a junction it renders the
+	 * branch card, then a continuation container holding everything below it, and
+	 * recurses into that container along the chosen (or hover-previewed) option.
+	 */
+	private renderOutgoing(parent: HTMLElement, from: TFile, visited: Set<string>, budget: number): void {
+		const edges = this.graph?.outgoing;
+		if (!edges) return;
+		let node = from;
+		let remaining = budget;
+
+		for (let i = 0; i < MAX_ITERATIONS && remaining > 0; i++) {
+			const neighbours = edges.get(node.path) ?? [];
+			if (neighbours.length === 0) return;
+
+			if (neighbours.length >= 2) {
+				const key = branchKey("outgoing", node);
+				const stored = this.branchSelections.get(key);
+				const selected = neighbours.find((f) => f.path === stored) ?? mostRecent(neighbours);
+				this.renderBranchEntry(parent, { kind: "branch", options: neighbours, key, selected }, "outgoing");
+				remaining--; // the branch entry occupies a slot
+
+				const container = parent.createDiv({ cls: "folgezettel-continuation" });
+				this.branchContinuations.set(key, { container, options: neighbours, visited: new Set(visited), budget: remaining });
+				this.renderContinuation(key);
+				return; // the recursion owns everything below the card
+			}
+
+			const next = neighbours[0];
+			if (visited.has(next.path)) return;
+			visited.add(next.path);
+			this.renderEntry(parent, next, "outgoing");
+			remaining--;
+			node = next;
+		}
+	}
+
+	/** (Re)render a junction's continuation container from its current/previewed choice. */
+	private renderContinuation(key: string): void {
+		const info = this.branchContinuations.get(key);
+		if (!info) return;
+		info.container.empty();
+
+		const { options, visited, budget, container } = info;
+		const preview =
+			this.previewBranch?.key === key ? options.find((f) => f.path === this.previewBranch?.path) : undefined;
+		const stored = this.branchSelections.get(key);
+		const selected = options.find((f) => f.path === stored) ?? mostRecent(options);
+		const continueFrom = preview ?? selected;
+		if (visited.has(continueFrom.path)) return;
+
+		const nextVisited = new Set(visited);
+		nextVisited.add(continueFrom.path);
+		this.renderOutgoing(container, continueFrom, nextVisited, budget);
+	}
+
+	/**
+	 * Walk the graph in one direction, following single edges and, at a junction,
+	 * the chosen option (reader's pick, else most recent mtime). Used for the
+	 * incoming side; the outgoing side is walked-and-rendered by `renderOutgoing`.
 	 * Returns items ordered from nearest the active note to farthest.
 	 */
 	private buildStrand(graph: FolgezettelGraph, active: TFile, direction: Direction): StrandItem[] {
@@ -171,6 +246,7 @@ export class FolgezettelView extends ItemView {
 		setIcon(toggle, "git-fork");
 		toggle.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
+			this.previewBranch = null;
 			if (this.expandedBranches.has(key)) this.expandedBranches.delete(key);
 			else this.expandedBranches.add(key);
 			this.render();
@@ -187,11 +263,33 @@ export class FolgezettelView extends ItemView {
 		for (const file of ordered) {
 			const option = optionList.createDiv({ cls: "folgezettel-branch-option", text: file.basename });
 			option.addEventListener("click", () => {
+				this.previewBranch = null;
 				this.branchSelections.set(key, file.path);
 				this.expandedBranches.delete(key);
 				this.render();
 			});
+			// Outgoing only (for now): hovering an option previews its continuation below.
+			if (direction === "outgoing") {
+				option.addEventListener("mouseenter", () => this.setPreviewBranch(key, file.path));
+			}
 		}
+		if (direction === "outgoing") {
+			optionList.addEventListener("mouseleave", () => this.clearPreviewBranch(key));
+		}
+	}
+
+	private setPreviewBranch(key: string, path: string): void {
+		if (this.previewBranch?.key === key && this.previewBranch?.path === path) return;
+		this.previewBranch = { key, path };
+		// Rebuild only the continuation below this card; the card (and the option the
+		// cursor is over) stays in place, so no hover thrash.
+		this.renderContinuation(key);
+	}
+
+	private clearPreviewBranch(key: string): void {
+		if (this.previewBranch?.key !== key) return;
+		this.previewBranch = null;
+		this.renderContinuation(key);
 	}
 
 	/** A clickable, hover-previewable note title, as used by every entry. */
