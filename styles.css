@@ -32,9 +32,12 @@
 	overflow: hidden;
 }
 
-/* Incoming hugs the active note at its bottom and extends upward. */
+/* Incoming hugs the active note at its bottom and extends upward. Entries are
+   emitted nearest -> farthest, so column-reverse puts the nearest at the bottom
+   (against the active note) and the farthest at the top. */
 .folgezettel-region.is-incoming {
-	justify-content: flex-end;
+	flex-direction: column-reverse;
+	justify-content: flex-start;
 }
 
 /* Layout-transparent wrapper: a junction's continuation lives here so hover

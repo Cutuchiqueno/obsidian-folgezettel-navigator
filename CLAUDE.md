@@ -28,10 +28,11 @@ source files under `src/`, each a clear layer:
 - **`view.ts`** — `FolgezettelView` (an `ItemView`). Owns all DOM and rendering (each
   entry is a left gutter with the guide rail + a direction chevron, then the title).
   Strand traversal lives here, not in `graph.ts`, because it depends on pane-local
-  branch state. The **incoming** side is computed by `buildStrand` then rendered; the
-  **outgoing** side is walked *and* rendered together by `renderOutgoing`, so each
-  junction's continuation gets its own container that a hover preview can rebuild in
-  place (see below).
+  branch state. Both sides are walked *and* rendered together by `renderStrand(parent,
+  from, direction, visited, budget)`, emitting entries nearest → farthest; at a junction
+  it renders the card plus a continuation container (`branchContinuations`) that a hover
+  preview can rebuild in place (see below). The incoming region is flipped visually with
+  CSS `column-reverse` so the same nearest-first walk reads bottom → top.
 - **`main.ts`** — plugin entry: registers the view type, ribbon icon, and command.
 
 ### Key model decisions (read before changing traversal/rendering)
@@ -41,13 +42,13 @@ source files under `src/`, each a clear layer:
   renders *below* it. Do not flip these without also flipping the render order in
   `view.ts`.
 - **Active note pinned to the vertical centre.** The list is a flex column of three
-  parts: an incoming region (`flex: 1`, bottom-anchored via `justify-content:
-  flex-end`), the active entry (`flex: 0 0 auto`), and an outgoing region (`flex: 1`,
+  parts: an incoming region (`flex: 1`, `column-reverse` so it's bottom-anchored and
+  grows upward), the active entry (`flex: 0 0 auto`), and an outgoing region (`flex: 1`,
   top-anchored). Each region grows *outward* from the active note and clips at its far
   end (`overflow: hidden`, so tall strands are cut off, not scrolled). This is not just
   cosmetic: because every continuation grows away from the active note, a hovered branch
-  card never shifts under the cursor — the precondition that lets the outgoing hover
-  preview work, and that the (still unbuilt) incoming preview will rely on.
+  card never shifts under the cursor — the precondition that makes the hover preview
+  work in **both** directions.
 - **Junctions are followed, not stopped.** When a note has 2+ neighbours in the walk
   direction, a `branch` entry is emitted and the strand continues along the chosen
   option — the reader's pick (`branchSelections`) if any, else the option with the most
@@ -56,7 +57,7 @@ source files under `src/`, each a clear layer:
   upward chain is reversed at render time so top-to-bottom reads with the sequence.
 - **Branch state is pane-local and per-note.** `expandedBranches` (which junction
   cards are open) and `branchSelections` (junction key → chosen option path) live on
-  the view and drive `buildStrand`. They are **cleared whenever the active note
+  the view and drive `renderStrand`. They are **cleared whenever the active note
   changes** (`currentPath` guard in `render()`) but survive metadata refreshes.
   Junction key = `` `${direction}|${junction.path}` `` (see `branchKey`).
 - **A junction renders inline as a normal entry when collapsed.** It shows the chosen
@@ -65,20 +66,23 @@ source files under `src/`, each a clear layer:
   **chosen option first, not emphasised**, and picking one collapses it and re-roots the
   strand (it does **not** open the note). So a title click and a gutter-icon click on
   the same entry do different things.
-- **Outgoing hover preview is a partial rebuild — never route it through `render()`.**
-  Hovering an option in an expanded *outgoing* card sets `previewBranch` and reroutes
+- **Hover preview is a partial rebuild — never route it through `render()`.** Hovering
+  an option in an expanded card (either direction) sets `previewBranch` and reroutes
   that junction's continuation to the hovered option via `renderContinuation(key)`,
   which re-empties **only** that junction's continuation container (tracked in
   `branchContinuations`) and leaves the card — and the option under the cursor —
   untouched. A full `render()` here tears down the hovered element and thrashes
   mouseenter/mouseleave (empirically ~19 renders + a stuck preview), which is exactly
   the bug this design avoids. The card's option order never changes during preview
-  (chosen option stays first). Incoming previews are deliberately not implemented yet.
+  (chosen option stays first).
 - **Rendering is otherwise full teardown.** `render()` calls `contentEl.empty()` and
   rebuilds; expand/select/navigation mutate state and call `render()` (hover preview is
-  the lone exception, above). It is wired to `active-leaf-change`, `metadataCache`
-  `resolved`, and `changed` — so the panel re-centers on note switches and refreshes
-  when links change.
+  the lone exception, above). It is wired to `metadataCache` `resolved`/`changed`, and —
+  via `renderIfNoteChanged` — to `active-leaf-change` and `file-open`. **That navigation
+  handler guards on the file path** (`getActiveFile()?.path !== currentPath`): merely
+  focusing the pane fires `active-leaf-change` with the same file, and an unconditional
+  re-render there rebuilds the DOM mid-click — destroying the clicked element before
+  `mouseup`, which made the pane require two clicks when focus started in the editor.
 
 ### Obsidian integration points
 
@@ -129,7 +133,8 @@ card sits directly next to the active row, an adjacent-sibling rule adds a small
 
 The list splits into `.folgezettel-region.is-incoming` / `.is-outgoing` (each `flex: 1`,
 `overflow: hidden`) with the active entry between them, so the active note stays
-vertically centred (see "Active note pinned to the vertical centre"). Each outgoing
-junction's continuation is wrapped in a `.folgezettel-continuation` element set to
-`display: contents` (layout-transparent), so a hover preview can rebuild just that
-subtree without perturbing the sequence's flex layout.
+vertically centred (see "Active note pinned to the vertical centre"). The incoming
+region uses `flex-direction: column-reverse`, so the nearest-first walk order renders
+bottom → top. Each junction's continuation is wrapped in a `.folgezettel-continuation`
+element set to `display: contents` (layout-transparent), so a hover preview can rebuild
+just that subtree without perturbing the sequence's flex layout.
