@@ -127,9 +127,11 @@ A junction entry replaces the direction chevron with a `git-fork` icon
 (`.folgezettel-branch-toggle`) in the same gutter slot; when expanded, its
 `.folgezettel-branch-options` list takes the place of the title, styled to mirror
 Obsidian's search-result preview (`.search-result-file-matches` — `--search-result-background`,
-a `box-shadow` border ring, options divided by `border-bottom`). When such an expanded
-card sits directly next to the active row, an adjacent-sibling rule adds a small
-`margin-top` so its filled background does not butt against the active row's.
+a `box-shadow` border ring, options divided by `border-bottom`). When the entry nearest
+the active row is an expanded card (each region's `:first-child`, since the walk is
+nearest-first), a small margin on its active-facing side keeps its filled background
+from butting against the active row's — `margin-top` for outgoing, `margin-bottom` for
+incoming (the region is `column-reverse`, so the nearest card sits at its bottom).
 
 The list splits into `.folgezettel-region.is-incoming` / `.is-outgoing` (each `flex: 1`,
 `overflow: hidden`) with the active entry between them, so the active note stays

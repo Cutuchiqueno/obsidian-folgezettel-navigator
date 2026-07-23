@@ -204,9 +204,15 @@
 	background-color: var(--background-modifier-hover);
 }
 
-/* When an expanded card abuts the active note, its filled background nearly
-   touches the active row's; add a little breathing room between the two. */
-.folgezettel-entry.is-active + .folgezettel-entry.is-branch.is-expanded,
-.folgezettel-entry.is-branch.is-expanded + .folgezettel-entry.is-active {
+/* When the entry nearest the active note is an expanded card, its filled
+   background would butt against the active row's; add a little breathing room.
+   The nearest entry is each region's first child (nearest-first walk order):
+   just below the active note for outgoing, just above it for incoming (which is
+   column-reversed, so the gap goes on the card's bottom). */
+.folgezettel-region.is-outgoing > .folgezettel-entry.is-branch.is-expanded:first-child {
 	margin-top: var(--size-2-2);
+}
+
+.folgezettel-region.is-incoming > .folgezettel-entry.is-branch.is-expanded:first-child {
+	margin-bottom: var(--size-2-2);
 }
