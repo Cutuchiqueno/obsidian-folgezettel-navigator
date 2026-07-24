@@ -14,7 +14,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ItemView, Platform, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { HoverPopover, ItemView, Platform, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import { buildGraph, FolgezettelGraph } from "./graph";
 import type FolgezettelPlugin from "./main";
 
@@ -27,7 +27,7 @@ type Direction = "incoming" | "outgoing";
 
 export class FolgezettelView extends ItemView {
 	/** Live hover popover slot required by Obsidian's page-preview integration. */
-	hoverPopover: HTMLElement | null = null;
+	hoverPopover: HoverPopover | null = null;
 
 	/** Active note the current pane state belongs to; state resets when it changes. */
 	private currentPath: string | null = null;
