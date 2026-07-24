@@ -49,10 +49,10 @@ function toLinkpath(raw: unknown): string | null {
 
 /** Resolve every Folgezettel target declared in a note's frontmatter. */
 function resolveTargets(app: App, file: TFile, cache: CachedMetadata | null, propertyName: string): TFile[] {
-	const value = cache?.frontmatter?.[propertyName];
+	const value: unknown = cache?.frontmatter?.[propertyName];
 	if (value == null) return [];
 
-	const raws = Array.isArray(value) ? value : [value];
+	const raws: unknown[] = Array.isArray(value) ? (value as unknown[]) : [value];
 	const targets: TFile[] = [];
 	const seen = new Set<string>();
 

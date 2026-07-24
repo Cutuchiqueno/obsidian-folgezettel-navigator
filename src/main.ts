@@ -29,20 +29,21 @@ export default class FolgezettelPlugin extends Plugin {
 		this.addRibbonIcon("git-branch", "Open Folgezettel navigator", () => this.activateView());
 
 		this.addCommand({
-			id: "open-folgezettel-navigator",
-			name: "Open Folgezettel navigator",
+			id: "open",
+			name: "Open panel",
 			callback: () => this.activateView(),
 		});
 
 		this.addSettingTab(new FolgezettelSettingTab(this.app, this));
 	}
 
-	async onunload(): Promise<void> {
+	onunload(): void {
 		// Obsidian detaches views of registered types automatically on unload.
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = (await this.loadData()) as Partial<FolgezettelSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 	}
 
 	/** Persist settings and re-render any open panes so changes take effect immediately. */
@@ -64,6 +65,6 @@ export default class FolgezettelPlugin extends Plugin {
 			await leaf.setViewState({ type: VIEW_TYPE_FOLGEZETTEL, active: true });
 		}
 
-		workspace.revealLeaf(leaf);
+		await workspace.revealLeaf(leaf);
 	}
 }

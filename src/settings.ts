@@ -63,7 +63,6 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(1, 10, 1)
 					.setValue(this.plugin.settings.maxSteps)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						this.plugin.settings.maxSteps = value;
 						await this.plugin.saveSettings();

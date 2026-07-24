@@ -304,7 +304,7 @@ export class FolgezettelView extends ItemView {
 		link.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
 			const newLeaf = event.ctrlKey || event.metaKey;
-			this.app.workspace.getLeaf(newLeaf).openFile(file);
+			void this.app.workspace.getLeaf(newLeaf).openFile(file);
 		});
 	}
 
