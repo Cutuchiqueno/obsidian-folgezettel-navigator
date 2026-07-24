@@ -63,7 +63,7 @@ export class FolgezettelView extends ItemView {
 		// clicked element before `mouseup`, which is what made the pane need two
 		// clicks when focus started in the editor.
 		const renderIfNoteChanged = () => {
-			if (this.app.workspace.getActiveFile()?.path !== this.currentPath) this.render();
+			if (this.activeNotePath() !== this.currentPath) this.render();
 		};
 		this.registerEvent(this.app.workspace.on("active-leaf-change", renderIfNoteChanged));
 		this.registerEvent(this.app.workspace.on("file-open", renderIfNoteChanged));
@@ -78,22 +78,33 @@ export class FolgezettelView extends ItemView {
 		// Nothing to tear down: all DOM lives inside contentEl.
 	}
 
+	/** Path of the active markdown note, or null when the active view has none. */
+	private activeNotePath(): string | null {
+		const file = this.app.workspace.getActiveFile();
+		return file && file.extension === "md" ? file.path : null;
+	}
+
 	private render(): void {
 		const el = this.contentEl;
 		el.empty();
 
 		const active = this.app.workspace.getActiveFile();
-		if (!active || active.extension !== "md") {
-			el.createDiv({ cls: "folgezettel-empty", text: "Open a note to see its Folgezettel sequence." });
-			return;
-		}
+		const note = active && active.extension === "md" ? active : null;
 
-		// Navigating to a different note resets the per-note branch choices.
-		if (active.path !== this.currentPath) {
-			this.currentPath = active.path;
+		// Reset the per-note branch choices whenever the shown note changes — including
+		// to *none* (a non-file view like the graph). Tracking that null keeps the guard
+		// honest, so returning to a note tab refreshes the pane instead of leaving the
+		// "open a note" message up.
+		if ((note?.path ?? null) !== this.currentPath) {
+			this.currentPath = note?.path ?? null;
 			this.expandedBranches.clear();
 			this.branchSelections.clear();
 			this.previewBranch = null;
+		}
+
+		if (!note) {
+			el.createDiv({ cls: "folgezettel-empty", text: "Open a note to see its Folgezettel sequence." });
+			return;
 		}
 
 		this.graph = buildGraph(this.app);
@@ -108,12 +119,12 @@ export class FolgezettelView extends ItemView {
 		// nearest -> farthest order; the incoming region is flipped by CSS
 		// (`column-reverse`) so that reads bottom -> top.
 		const incomingEl = list.createDiv({ cls: "folgezettel-region is-incoming" });
-		this.renderStrand(incomingEl, active, "incoming", new Set<string>([active.path]), MAX_STEPS);
+		this.renderStrand(incomingEl, note, "incoming", new Set<string>([note.path]), MAX_STEPS);
 
-		this.renderEntry(list, active, "active");
+		this.renderEntry(list, note, "active");
 
 		const outgoingEl = list.createDiv({ cls: "folgezettel-region is-outgoing" });
-		this.renderStrand(outgoingEl, active, "outgoing", new Set<string>([active.path]), MAX_STEPS);
+		this.renderStrand(outgoingEl, note, "outgoing", new Set<string>([note.path]), MAX_STEPS);
 	}
 
 	/**

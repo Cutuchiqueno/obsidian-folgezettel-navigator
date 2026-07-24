@@ -57,8 +57,9 @@ source files under `src/`, each a clear layer:
   upward chain is reversed at render time so top-to-bottom reads with the sequence.
 - **Branch state is pane-local and per-note.** `expandedBranches` (which junction
   cards are open) and `branchSelections` (junction key → chosen option path) live on
-  the view and drive `renderStrand`. They are **cleared whenever the active note
-  changes** (`currentPath` guard in `render()`) but survive metadata refreshes.
+  the view and drive `renderStrand`. They are **cleared whenever the shown note
+  changes** (the `currentPath` guard in `render()`, which also treats "no note" as a
+  change) but survive metadata refreshes.
   Junction key = `` `${direction}|${junction.path}` `` (see `branchKey`).
 - **A junction renders inline as a normal entry when collapsed.** It shows the chosen
   option's title (click opens the note) with a fork icon in the gutter; clicking the
@@ -79,10 +80,14 @@ source files under `src/`, each a clear layer:
   rebuilds; expand/select/navigation mutate state and call `render()` (hover preview is
   the lone exception, above). It is wired to `metadataCache` `resolved`/`changed`, and —
   via `renderIfNoteChanged` — to `active-leaf-change` and `file-open`. **That navigation
-  handler guards on the file path** (`getActiveFile()?.path !== currentPath`): merely
-  focusing the pane fires `active-leaf-change` with the same file, and an unconditional
-  re-render there rebuilds the DOM mid-click — destroying the clicked element before
-  `mouseup`, which made the pane require two clicks when focus started in the editor.
+  handler guards on the active note path** (`activeNotePath() !== currentPath`, where
+  `activeNotePath()` is the active markdown file's path or `null` for a non-note view):
+  merely focusing the pane fires `active-leaf-change` with the same file, and an
+  unconditional re-render there rebuilds the DOM mid-click — destroying the clicked
+  element before `mouseup`, which made the pane require two clicks when focus started in
+  the editor. Crucially, `render()` sets `currentPath` in **every** branch — the empty
+  state included (to `null`) — otherwise leaving to a non-note view (e.g. the graph) and
+  back would keep `currentPath` stale and the pane stuck on the "open a note" message.
 
 ### Obsidian integration points
 
