@@ -165,8 +165,8 @@
 }
 
 .folgezettel-branch-toggle svg {
-	width: 14px;
-	height: 14px;
+	width: var(--fz-icon-size);
+	height: var(--fz-icon-size);
 }
 
 /* Expanded: the entry lists every option (chosen one first) as a card styled

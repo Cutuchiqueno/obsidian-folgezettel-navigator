@@ -1,10 +1,9 @@
 import { ItemView, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import { buildGraph, FolgezettelGraph } from "./graph";
+import type FolgezettelPlugin from "./main";
 
 export const VIEW_TYPE_FOLGEZETTEL = "folgezettel-navigator-view";
 
-/** How many notes to show above and below the active note. */
-const MAX_STEPS = 5;
 /** Safety bound on strand-walk iterations (cycles are already guarded by `visited`). */
 const MAX_ITERATIONS = 100;
 
@@ -38,8 +37,13 @@ export class FolgezettelView extends ItemView {
 		{ container: HTMLElement; options: TFile[]; direction: Direction; visited: Set<string>; budget: number }
 	>();
 
-	constructor(leaf: WorkspaceLeaf) {
+	constructor(leaf: WorkspaceLeaf, private plugin: FolgezettelPlugin) {
 		super(leaf);
+	}
+
+	/** Re-render with the current settings (called by the plugin when they change). */
+	refresh(): void {
+		this.render();
 	}
 
 	getViewType(): string {
@@ -107,7 +111,8 @@ export class FolgezettelView extends ItemView {
 			return;
 		}
 
-		this.graph = buildGraph(this.app);
+		const { propertyName, maxSteps } = this.plugin.settings;
+		this.graph = buildGraph(this.app, propertyName);
 		this.branchContinuations.clear();
 
 		const list = el.createDiv({ cls: "folgezettel-list" });
@@ -119,12 +124,12 @@ export class FolgezettelView extends ItemView {
 		// nearest -> farthest order; the incoming region is flipped by CSS
 		// (`column-reverse`) so that reads bottom -> top.
 		const incomingEl = list.createDiv({ cls: "folgezettel-region is-incoming" });
-		this.renderStrand(incomingEl, note, "incoming", new Set<string>([note.path]), MAX_STEPS);
+		this.renderStrand(incomingEl, note, "incoming", new Set<string>([note.path]), maxSteps);
 
 		this.renderEntry(list, note, "active");
 
 		const outgoingEl = list.createDiv({ cls: "folgezettel-region is-outgoing" });
-		this.renderStrand(outgoingEl, note, "outgoing", new Set<string>([note.path]), MAX_STEPS);
+		this.renderStrand(outgoingEl, note, "outgoing", new Set<string>([note.path]), maxSteps);
 	}
 
 	/**

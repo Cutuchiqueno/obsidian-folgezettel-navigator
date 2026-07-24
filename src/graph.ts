@@ -1,6 +1,6 @@
 import { App, CachedMetadata, TFile } from "obsidian";
 
-/** Frontmatter property that holds the outgoing Folgezettel link(s). */
+/** Default frontmatter property that holds the outgoing Folgezettel link(s). */
 export const FOLGEZETTEL_KEY = "folgezettel";
 
 /**
@@ -32,8 +32,8 @@ function toLinkpath(raw: unknown): string | null {
 }
 
 /** Resolve every Folgezettel target declared in a note's frontmatter. */
-function resolveTargets(app: App, file: TFile, cache: CachedMetadata | null): TFile[] {
-	const value = cache?.frontmatter?.[FOLGEZETTEL_KEY];
+function resolveTargets(app: App, file: TFile, cache: CachedMetadata | null, propertyName: string): TFile[] {
+	const value = cache?.frontmatter?.[propertyName];
 	if (value == null) return [];
 
 	const raws = Array.isArray(value) ? value : [value];
@@ -59,13 +59,13 @@ function resolveTargets(app: App, file: TFile, cache: CachedMetadata | null): TF
  * cache, not the files themselves), which keeps the view a pure function of the
  * current vault state and avoids incremental-update bookkeeping.
  */
-export function buildGraph(app: App): FolgezettelGraph {
+export function buildGraph(app: App, propertyName: string): FolgezettelGraph {
 	const outgoing = new Map<string, TFile[]>();
 	const incoming = new Map<string, TFile[]>();
 
 	for (const file of app.vault.getMarkdownFiles()) {
 		const cache = app.metadataCache.getFileCache(file);
-		const targets = resolveTargets(app, file, cache);
+		const targets = resolveTargets(app, file, cache, propertyName);
 		if (targets.length === 0) continue;
 
 		outgoing.set(file.path, targets);

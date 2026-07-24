@@ -16,24 +16,30 @@ vault's `.obsidian/plugins/folgezettel-navigator/` and reload Obsidian.
 
 ## Architecture
 
-An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar. Three
+An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar. Four
 source files under `src/`, each a clear layer:
 
-- **`graph.ts`** — pure data layer, no DOM. `buildGraph(app)` scans every markdown
-  file's `folgezettel` frontmatter property (via the metadata cache) and produces
-  two adjacency maps: `outgoing` (A → its continuations) and `incoming` (the reverse
-  edges). Pure function of vault state — there is deliberately **no incremental
-  cache**; the graph is rebuilt on each render because reading the already-parsed
-  metadata cache is cheap.
-- **`view.ts`** — `FolgezettelView` (an `ItemView`). Owns all DOM and rendering (each
-  entry is a left gutter with the guide rail + a dot, then the title).
-  Strand traversal lives here, not in `graph.ts`, because it depends on pane-local
-  branch state. Both sides are walked *and* rendered together by `renderStrand(parent,
-  from, direction, visited, budget)`, emitting entries nearest → farthest; at a junction
-  it renders the card plus a continuation container (`branchContinuations`) that a hover
-  preview can rebuild in place (see below). The incoming region is flipped visually with
-  CSS `column-reverse` so the same nearest-first walk reads bottom → top.
-- **`main.ts`** — plugin entry: registers the view type, ribbon icon, and command.
+- **`graph.ts`** — pure data layer, no DOM. `buildGraph(app, propertyName)` scans every
+  markdown file's configured Folgezettel frontmatter property (default `folgezettel`,
+  via the metadata cache) and produces two adjacency maps: `outgoing` (A → its
+  continuations) and `incoming` (the reverse edges). Pure function of vault state —
+  there is deliberately **no incremental cache**; the graph is rebuilt on each render
+  because reading the already-parsed metadata cache is cheap.
+- **`view.ts`** — `FolgezettelView` (an `ItemView`), constructed with the plugin so it
+  can read live settings. Owns all DOM and rendering (each entry is a left gutter with
+  the guide rail + a dot, then the title). Strand traversal lives here, not in
+  `graph.ts`, because it depends on pane-local branch state. Both sides are walked *and*
+  rendered together by `renderStrand(parent, from, direction, visited, budget)`, emitting
+  entries nearest → farthest; at a junction it renders the card plus a continuation
+  container (`branchContinuations`) that a hover preview can rebuild in place (see below).
+  The incoming region is flipped visually with CSS `column-reverse` so the same
+  nearest-first walk reads bottom → top. `refresh()` re-renders on demand.
+- **`settings.ts`** — `FolgezettelSettings` (`propertyName`, `maxSteps`), `DEFAULT_SETTINGS`
+  (`folgezettel`, `5`), and the `FolgezettelSettingTab` (a text field for the property,
+  a `1–10` slider for the per-direction note count).
+- **`main.ts`** — plugin entry: loads settings, registers the view type (passing itself
+  to the view), the ribbon icon, the command, and the settings tab. `saveSettings()`
+  persists and then `refresh()`es every open pane so changes apply immediately.
 
 ### Key model decisions (read before changing traversal/rendering)
 
@@ -53,8 +59,9 @@ source files under `src/`, each a clear layer:
   direction, a `branch` entry is emitted and the strand continues along the chosen
   option — the reader's pick (`branchSelections`) if any, else the option with the most
   recent file **mtime** (`mostRecent`). A single neighbour is followed, zero ends the
-  strand. `MAX_STEPS` (5) caps the note count per direction (branch entries count). The
-  upward chain is reversed at render time so top-to-bottom reads with the sequence.
+  strand. The per-direction note cap is `settings.maxSteps` (default 5, configurable
+  1–10; branch entries count against it). The upward chain is reversed at render time so
+  top-to-bottom reads with the sequence.
 - **Branch state is pane-local and per-note.** `expandedBranches` (which junction
   cards are open) and `branchSelections` (junction key → chosen option path) live on
   the view and drive `renderStrand`. They are **cleared whenever the shown note
