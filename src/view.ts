@@ -1,4 +1,4 @@
-import { ItemView, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, Platform, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import { buildGraph, FolgezettelGraph } from "./graph";
 import type FolgezettelPlugin from "./main";
 
@@ -245,10 +245,16 @@ export class FolgezettelView extends ItemView {
 			});
 			// Hovering an option previews its continuation. Works in both directions
 			// because each region grows away from the active note (see the centred
-			// layout), so the card never shifts under the cursor.
-			option.addEventListener("mouseenter", () => this.setPreviewBranch(key, file.path));
+			// layout), so the card never shifts under the cursor. Touch has no hover
+			// (and no mouseleave to clear a stuck preview), so on mobile we skip it and
+			// rely on tap-to-select — the click handler above.
+			if (!Platform.isMobile) {
+				option.addEventListener("mouseenter", () => this.setPreviewBranch(key, file.path));
+			}
 		}
-		optionList.addEventListener("mouseleave", () => this.clearPreviewBranch(key));
+		if (!Platform.isMobile) {
+			optionList.addEventListener("mouseleave", () => this.clearPreviewBranch(key));
+		}
 	}
 
 	private setPreviewBranch(key: string, path: string): void {
@@ -288,6 +294,8 @@ export class FolgezettelView extends ItemView {
 
 	/** Trigger Obsidian's native page-preview popover (respects the Ctrl/hover setting). */
 	private attachHoverPreview(link: HTMLElement, file: TFile): void {
+		// Page preview is a desktop hover affordance; on mobile a tap just opens the note.
+		if (Platform.isMobile) return;
 		link.addEventListener("mouseover", (event: MouseEvent) => {
 			this.app.workspace.trigger("hover-link", {
 				event,

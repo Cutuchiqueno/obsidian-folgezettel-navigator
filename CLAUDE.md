@@ -82,7 +82,9 @@ source files under `src/`, each a clear layer:
   untouched. A full `render()` here tears down the hovered element and thrashes
   mouseenter/mouseleave (empirically ~19 renders + a stuck preview), which is exactly
   the bug this design avoids. The card's option order never changes during preview
-  (chosen option stays first).
+  (chosen option stays first). **The hover handlers are attached only when
+  `!Platform.isMobile`** — touch has no hover and never fires `mouseleave`, so a mobile
+  preview would get stuck; mobile relies on tap-to-select (the option `click` handler).
 - **Rendering is otherwise full teardown.** `render()` calls `contentEl.empty()` and
   rebuilds; expand/select/navigation mutate state and call `render()` (hover preview is
   the lone exception, above). It is wired to `metadataCache` `resolved`/`changed`, and —
@@ -104,6 +106,10 @@ source files under `src/`, each a clear layer:
 - **Native page preview:** entries trigger the `hover-link` workspace event with
   `hoverParent: this` (the view exposes a `hoverPopover` slot for it). This inherits the
   user's "hover to preview" / Ctrl-key setting for free — do not reimplement previews.
+  Skipped on `Platform.isMobile` (a tap just opens the note).
+- **Mobile:** the plugin is mobile-compatible (`isDesktopOnly: false`, no Node/Electron
+  APIs). Everything works by tap; only the two desktop **hover** affordances — the branch
+  option preview and the page preview — are gated off via `Platform.isMobile`.
 - **Navigation:** `workspace.getLeaf(newLeaf).openFile(file)`; Ctrl/Cmd-click opens in a
   new leaf, matching native link behavior. Selecting a branch option, by contrast, never
   opens a note — it only mutates pane state and re-renders.
