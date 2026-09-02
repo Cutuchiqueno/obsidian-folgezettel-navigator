@@ -59,15 +59,15 @@ notes on each side (configurable — see [Settings](#settings)).
 ## Junctions (branches)
 
 Where the thread forks — a note with more than one continuation, or more than one note
-leading into it — the panel shows a **junction**: an entry with a *fork* icon in place
-of the plain dot.
+leading into it — the panel shows a **junction**: an entry whose plain dot is replaced by
+a filled circle carrying the number of branches you can pick from.
 
 A junction can't display every strand at once, so it follows the **first** link in the
 note's `folgezettel` property — the branch that continues the thread (see
 [Which strand counts as "the current branch"](#which-strand-counts-as-the-current-branch)).
 To explore the alternatives:
 
-1. **Click the fork icon.** The entry expands into a card listing every option (your
+1. **Click the numbered circle.** The entry expands into a card listing every option (your
    current choice first), styled like Obsidian's search-result previews.
 2. **Hover an option** *(desktop)* to preview where that strand leads — the sequence
    beyond the junction updates live, without committing to it.
@@ -120,19 +120,19 @@ panel for as long as you stay on that note.
 | --- | --- |
 | **Click** a note title | Opens the note; the panel re-centres on it |
 | **Ctrl/Cmd-hover** a title *(desktop)* | Obsidian's native page preview |
-| **Click** a junction's fork icon | Expand / collapse its list of branches |
+| **Click** a junction's numbered circle | Expand / collapse its list of branches |
 | **Hover** a branch option *(desktop)* | Preview that strand below the card |
 | **Click** a branch option | Choose that strand (does **not** open the note) |
 | **Navigation command** (palette / hotkey) | Jumps the current tab along the sequence |
 
 On a junction entry the two targets do different things: clicking the **title** opens the
-note, while clicking the **fork icon** opens the branch list.
+note, while clicking the **numbered circle** opens the branch list.
 
 ### On mobile
 
 The plugin works on Obsidian Mobile. Everything is tap-driven: tap a title to open it,
-tap a fork to expand a junction, tap an option to choose a strand. The hover-only
-previews (branch preview and page preview) are desktop affordances and are simply absent
+tap a junction's numbered circle to expand it, tap an option to choose a strand. The
+hover-only previews (branch preview and page preview) are desktop affordances and are simply absent
 on touch — the rest of the workflow is identical.
 
 ## A typical workflow

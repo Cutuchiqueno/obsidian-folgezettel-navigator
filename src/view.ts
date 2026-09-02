@@ -14,7 +14,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { HoverPopover, ItemView, Platform, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { HoverPopover, ItemView, Platform, TFile, WorkspaceLeaf } from "obsidian";
 import { buildGraph, FolgezettelGraph } from "./graph";
 import type FolgezettelPlugin from "./main";
 
@@ -227,9 +227,10 @@ export class FolgezettelView extends ItemView {
 
 	/**
 	 * A junction, rendered inline. Collapsed it is a normal entry for the chosen
-	 * option (title opens the note); its gutter shows a branch icon instead of the
-	 * direction arrow. Clicking the branch icon expands the entry into the full
-	 * option list; picking an option collapses it and re-roots the strand.
+	 * option (title opens the note); its gutter shows a filled circle carrying the
+	 * number of selectable branches instead of the plain dot. Clicking that circle
+	 * expands the entry into the full option list; picking an option collapses it
+	 * and re-roots the strand.
 	 */
 	private renderBranchEntry(
 		parent: HTMLElement,
@@ -242,8 +243,11 @@ export class FolgezettelView extends ItemView {
 
 		const row = parent.createDiv({ cls: `folgezettel-entry is-branch is-${direction}${expanded ? " is-expanded" : ""}` });
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
-		const toggle = marker.createDiv({ cls: "folgezettel-branch-toggle", attr: { "aria-label": "Show branches" } });
-		setIcon(toggle, "git-fork");
+		const toggle = marker.createDiv({
+			cls: "folgezettel-branch-toggle",
+			text: String(options.length),
+			attr: { "aria-label": `Show ${options.length} branches` },
+		});
 		toggle.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
 			this.previewBranch = null;

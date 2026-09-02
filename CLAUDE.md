@@ -81,11 +81,11 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   change) but survive metadata refreshes.
   Junction key = `` `${direction}|${junction.path}` `` (see `branchKey`).
 - **A junction renders inline as a normal entry when collapsed.** It shows the chosen
-  option's title (click opens the note) with a fork icon in the gutter; clicking the
-  fork icon expands the entry into the full option list (a card — see Styling), the
-  **chosen option first, not emphasised**, and picking one collapses it and re-roots the
-  strand (it does **not** open the note). So a title click and a gutter-icon click on
-  the same entry do different things.
+  option's title (click opens the note) with a filled circle in the gutter carrying the
+  number of options; clicking that circle expands the entry into the full option list
+  (a card — see Styling), the **chosen option first, not emphasised**, and picking one
+  collapses it and re-roots the strand (it does **not** open the note). So a title click
+  and a gutter-icon click on the same entry do different things.
 - **Hover preview is a partial rebuild — never route it through `render()`.** Hovering
   an option in an expanded card (either direction) sets `previewBranch` and reroutes
   that junction's continuation to the hovered option via `renderContinuation(key)`,
@@ -171,11 +171,15 @@ gutter-to-text gap). The indentation rail is drawn per entry as **two** guide se
 `.folgezettel-marker::before` (above the icon) and `::after` (below), each stopping
 `--fz-rail-gap` short of the icon — `50% ∓ (--fz-icon-size / 2 + --fz-rail-gap)` — so the
 line never touches it. `--fz-icon-size` is `8px` for the dot, overridden to `14px` on the
-branch marker for the larger fork. Consecutive entries' segments meet at the row boundary
-to read as one line; both segments are hidden on the active (pivot) row.
+branch marker for the larger branch-count circle. Consecutive entries' segments meet at
+the row boundary to read as one line; both segments are hidden on the active (pivot) row.
 
-A junction entry uses a `git-fork` icon (`.folgezettel-branch-toggle`) in the gutter slot
-instead of the dot; when expanded, its
+A junction entry uses a filled circle carrying the number of selectable branches
+(`.folgezettel-branch-toggle`) in the gutter slot instead of the dot — the same
+`--nav-item-color` fill, with the count knocked out in `--background-primary`, and a
+`min-width` + pill radius + `white-space: nowrap` so a longer count widens the shape
+instead of wrapping inside it (it is absolutely positioned, so shrink-to-fit would
+otherwise cap its width at half the marker). When expanded, its
 `.folgezettel-branch-options` list takes the place of the title, styled to mirror
 Obsidian's search-result preview (`.search-result-file-matches` — `--search-result-background`,
 a `box-shadow` border ring, options divided by `border-bottom`). When the entry nearest

@@ -142,12 +142,17 @@
 	text-decoration: none;
 }
 
-/* A junction entry: the gutter shows a branch icon (click to expand/collapse)
-   instead of the direction arrow. The icon is larger, so widen the rail gap. */
+/* A junction entry: in place of the dot the gutter shows a filled circle carrying
+   the number of selectable branches (click to expand/collapse). It is larger than
+   the dot, so the rail gap widens with it. */
 .folgezettel-entry.is-branch .folgezettel-marker {
 	--fz-icon-size: 14px;
 }
 
+/* Same filled shape as the dot, with the count knocked out of it. min-width plus
+   the pill radius keeps a single digit perfectly round; nowrap lets a longer count
+   widen the shape instead of wrapping inside it (the box is absolutely positioned, so
+   shrink-to-fit would otherwise cap its width at half the marker). */
 .folgezettel-branch-toggle {
 	position: absolute;
 	top: 50%;
@@ -155,18 +160,24 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	color: var(--text-muted);
+	box-sizing: border-box;
+	min-width: var(--fz-icon-size);
+	height: var(--fz-icon-size);
+	padding: 0 var(--size-2-1);
+	border-radius: calc(var(--fz-icon-size) / 2);
+	background-color: var(--nav-item-color);
+	color: var(--background-primary);
+	font-size: calc(var(--fz-icon-size) * 0.64);
+	font-weight: var(--font-semibold);
+	line-height: 1;
+	white-space: nowrap;
 	transform: translate(-50%, -50%);
 	cursor: pointer;
+	user-select: none;
 }
 
 .folgezettel-branch-toggle:hover {
-	color: var(--text-normal);
-}
-
-.folgezettel-branch-toggle svg {
-	width: var(--fz-icon-size);
-	height: var(--fz-icon-size);
+	background-color: var(--nav-item-color-hover);
 }
 
 /* Expanded: the entry lists every option (chosen one first) as a card styled
