@@ -24,7 +24,11 @@ export const VIEW_TYPE_FOLGEZETTEL = "folgezettel-navigator-view";
 /** Safety bound on strand-walk iterations (cycles are already guarded by `visited`). */
 const MAX_ITERATIONS = 100;
 
-type Direction = "incoming" | "outgoing";
+/**
+ * Which part of the strand an entry belongs to. Styling and state keys only — the panel
+ * is walked and drawn as **one** strand, top to bottom, not as two opposed halves.
+ */
+type EntryKind = "incoming" | "outgoing" | "active";
 
 export class FolgezettelView extends ItemView {
 	/** Live hover popover slot required by Obsidian's page-preview integration. */
@@ -32,8 +36,6 @@ export class FolgezettelView extends ItemView {
 
 	/** Active note the current pane state belongs to; state resets when it changes. */
 	private currentPath: string | null = null;
-	/** The active note itself — the walk `findParent` starts from (see `renderFarEnd`). */
-	private activeNote: TFile | null = null;
 	/** Junction keys whose option list is expanded. */
 	private expandedBranches = new Set<string>();
 	/** Junction key -> chosen option path (overrides the first-link default). */
@@ -47,13 +49,21 @@ export class FolgezettelView extends ItemView {
 	/** Cached graph for the current render, reused by on-hover continuation rebuilds. */
 	private graph: FolgezettelGraph | null = null;
 	/**
-	 * Per-junction handle to the DOM container holding the strand beyond its card,
-	 * plus the state needed to re-walk it — so a hover preview rebuilds only that
-	 * subtree and never the card the cursor sits on.
+	 * Per-card handle to the DOM container holding **everything below** that card, with
+	 * the two things that can go in it: what actually belongs there, and the strand a
+	 * hovered option would put there instead. A preview rebuilds only this subtree, so
+	 * the card the cursor sits on is never torn down.
 	 */
 	private branchContinuations = new Map<
 		string,
-		{ container: HTMLElement; options: TFile[]; direction: Direction; visited: Set<string>; budget: number }
+		{
+			container: HTMLElement;
+			options: TFile[];
+			/** Draw what belongs below the card when nothing is being previewed. */
+			renderDefault: () => void;
+			/** Draw the strand that follows `option` instead, while it is hovered. */
+			renderPreview: (option: TFile) => void;
+		}
 	>();
 
 	constructor(leaf: WorkspaceLeaf, private plugin: FolgezettelPlugin) {
@@ -124,8 +134,6 @@ export class FolgezettelView extends ItemView {
 			this.branchSelections.clear();
 			this.previewBranch = null;
 		}
-		this.activeNote = note;
-
 		if (!note) {
 			el.createDiv({ cls: "folgezettel-empty", text: "Open a note to see its Folgezettel sequence." });
 			return;
@@ -137,114 +145,191 @@ export class FolgezettelView extends ItemView {
 
 		const list = el.createDiv({ cls: "folgezettel-list" });
 
-		// Active note pinned to the vertical centre; each side grows outward from it
-		// (incoming upward, outgoing downward). Because a junction's continuation always
-		// grows away from the active note, a hover preview never shifts the card the
-		// cursor sits on. Both sides are walked-and-rendered by `renderStrand` in
-		// nearest -> farthest order; the incoming region is flipped by CSS
-		// (`column-reverse`) so that reads bottom -> top.
-		const incomingEl = list.createDiv({ cls: "folgezettel-region is-incoming" });
-		this.renderStrand(incomingEl, note, "incoming", new Set<string>([note.path]), maxSteps);
+		// One strand, anchored at the **top** of the panel and read straight down: where
+		// the branch was started, the ancestors, the active note, its continuations, where
+		// it ends. Every row's position therefore depends only on what is above it, which
+		// is what lets a card own — and a hover preview replace — everything below it,
+		// the active note included, without the card ever moving under the cursor.
+		const visited = new Set<string>([note.path]);
+		const ancestors = this.walkUp(note, visited, maxSteps);
 
-		const activeSiblings = this.siblingOptions(note);
-		if (activeSiblings) this.renderSiblingEntry(list, note, "active", activeSiblings);
-		else this.renderEntry(list, note, "active");
-
-		const outgoingEl = list.createDiv({ cls: "folgezettel-region is-outgoing" });
-		this.renderStrand(outgoingEl, note, "outgoing", new Set<string>([note.path]), maxSteps);
+		this.renderStartOfBranch(list, note, visited);
+		this.renderChain(list, ancestors, ancestors.length - 1, note, visited, maxSteps);
 	}
 
 	/**
-	 * Walk and render a strand from `from` in `direction`. At a junction it renders the
-	 * branch card, then a continuation container holding the strand beyond it, and
-	 * recurses into that container along the chosen (or hover-previewed) option.
-	 * Entries are emitted nearest -> farthest; CSS flips the incoming region visually.
-	 * Wherever the walk stops short, `renderFarEnd` adds the detached far-end entry.
+	 * The ancestors of `note`, nearest first, up to `budget`. A note should have a single
+	 * predecessor; where a vault gives it several this takes `incoming[0]`, the same
+	 * deterministic pick the upward walks in `navigate.ts` make. A fork *upward* is
+	 * malformed data, not a choice to put to the reader — see the malformed-data note in
+	 * CLAUDE.md.
 	 */
-	private renderStrand(
-		parent: HTMLElement,
-		from: TFile,
-		direction: Direction,
+	private walkUp(note: TFile, visited: Set<string>, budget: number): TFile[] {
+		const chain: TFile[] = [];
+		let node = note;
+
+		for (let i = 0; i < MAX_ITERATIONS && chain.length < budget; i++) {
+			const previous = this.graph?.incoming.get(node.path)?.[0];
+			if (!previous || visited.has(previous.path)) break;
+			visited.add(previous.path);
+			chain.push(previous);
+			node = previous;
+		}
+		return chain;
+	}
+
+	/**
+	 * Draw from `index` downward: the remaining ancestors, then the active note, then its
+	 * continuations. A note that is one of several branches takes a card, and everything
+	 * below it goes into that card's continuation container — so hovering one of its
+	 * options replaces the lot with that branch, and mouse-out puts the real strand back.
+	 */
+	private renderChain(
+		container: HTMLElement,
+		ancestors: TFile[],
+		index: number,
+		note: TFile,
 		visited: Set<string>,
-		budget: number,
-		afterJunction = false
+		budget: number
 	): void {
-		const edges = this.graph?.[direction];
+		if (index < 0) {
+			this.renderActive(container, note, visited, budget);
+			return;
+		}
+
+		const file = ancestors[index];
+		const options = this.siblingOptions(file);
+		if (!options) {
+			this.renderEntry(container, file, "incoming");
+			this.renderChain(container, ancestors, index - 1, note, visited, budget);
+			return;
+		}
+
+		const key = branchKey("incoming", file);
+		this.renderSiblingEntry(container, file, "incoming", options, key);
+		const below = container.createDiv({ cls: "folgezettel-continuation" });
+		this.branchContinuations.set(key, {
+			container: below,
+			options,
+			renderDefault: () => this.renderChain(below, ancestors, index - 1, note, visited, budget),
+			renderPreview: (option) => this.renderBranchPreview(below, option, visited, budget),
+		});
+		this.renderContinuation(key);
+	}
+
+	/** The active note, and below it the strand it continues into. */
+	private renderActive(container: HTMLElement, note: TFile, visited: Set<string>, budget: number): void {
+		const options = this.siblingOptions(note);
+		if (!options) {
+			this.renderEntry(container, note, "active");
+			this.renderStrand(container, note, new Set(visited), budget);
+			return;
+		}
+
+		const key = branchKey("active", note);
+		this.renderSiblingEntry(container, note, "active", options, key);
+		const below = container.createDiv({ cls: "folgezettel-continuation" });
+		this.branchContinuations.set(key, {
+			container: below,
+			options,
+			renderDefault: () => this.renderStrand(below, note, new Set(visited), budget),
+			renderPreview: (option) => this.renderBranchPreview(below, option, visited, budget),
+		});
+		this.renderContinuation(key);
+	}
+
+	/**
+	 * What a hovered sibling would put below its card: the strand following that option,
+	 * standing in for the ancestors, the active note and its continuations — every one of
+	 * which belongs to the branch the reader is looking away from. Transient: the card's
+	 * `renderDefault` puts the real strand back on mouse-out.
+	 */
+	private renderBranchPreview(container: HTMLElement, option: TFile, visited: Set<string>, budget: number): void {
+		const seen = new Set(visited);
+		seen.add(option.path);
+		this.renderStrand(container, option, seen, budget);
+	}
+
+	/**
+	 * Walk and render the strand continuing from `from`, downward. At a junction it renders
+	 * the branch card, then a continuation container holding the strand beyond it, and
+	 * recurses into that container along the chosen (or hover-previewed) option. Where the
+	 * walk stops short, `renderEndOfBranch` adds the detached entry for the branch's end.
+	 *
+	 * Downward only: the ancestors are drawn by `renderChain`, off `walkUp`. Nothing here
+	 * ever grows a strand *upward*, which is the property that lets the whole panel hang
+	 * from its top edge.
+	 */
+	private renderStrand(parent: HTMLElement, from: TFile, visited: Set<string>, budget: number): void {
+		const edges = this.graph?.outgoing;
 		if (!edges) return;
 		let node = from;
 		let remaining = budget;
-		// Is the farthest entry drawn so far a junction card? True only while this segment
-		// has drawn nothing of its own and the entry it continues from was one.
-		let lastIsJunction = afterJunction;
 
 		for (let i = 0; i < MAX_ITERATIONS && remaining > 0; i++) {
 			const neighbours = edges.get(node.path) ?? [];
 			if (neighbours.length === 0) break;
 
 			if (neighbours.length >= 2) {
-				const key = branchKey(direction, node);
-				const selected = this.selectedOption(key, neighbours);
-				this.renderBranchEntry(parent, neighbours, key, selected, direction);
+				const key = branchKey("outgoing", node);
+				this.renderBranchEntry(parent, neighbours, key, this.selectedOption(key, neighbours), "outgoing");
 				remaining--; // the branch entry occupies a slot
 
 				const container = parent.createDiv({ cls: "folgezettel-continuation" });
-				this.branchContinuations.set(key, { container, options: neighbours, direction, visited: new Set(visited), budget: remaining });
+				const beyond = remaining;
+				this.branchContinuations.set(key, {
+					container,
+					options: neighbours,
+					renderDefault: () => this.continueBeyond(container, this.selectedOption(key, neighbours), visited, beyond),
+					renderPreview: (option) => this.continueBeyond(container, option, visited, beyond),
+				});
 				this.renderContinuation(key);
-				return; // the recursion owns the strand beyond the card — far end included
+				return; // the recursion owns the strand beyond the card — its end included
 			}
 
 			const next = neighbours[0];
 			if (visited.has(next.path)) break;
 			visited.add(next.path);
-			// Walking up, `neighbours` counts predecessors, which says nothing about whether
-			// this note is one of several *branches* — that is a property of its parent's
-			// fork, so ask for it separately. Downward the junction case above already
-			// covers it: there the branch entry *is* the chosen sibling.
-			const siblings = direction === "incoming" ? this.siblingOptions(next) : null;
-			if (siblings) this.renderSiblingEntry(parent, next, direction, siblings);
-			else this.renderEntry(parent, next, direction);
+			this.renderEntry(parent, next, "outgoing");
 			remaining--;
-			lastIsJunction = false;
 			node = next;
 		}
 
-		this.renderFarEnd(parent, node, direction, visited, lastIsJunction);
+		this.renderEndOfBranch(parent, node, visited);
+	}
+
+	/** The strand past a junction card, from the option that card currently stands for. */
+	private continueBeyond(container: HTMLElement, option: TFile, visited: Set<string>, budget: number): void {
+		if (visited.has(option.path)) return;
+		const seen = new Set(visited);
+		seen.add(option.path);
+		this.renderStrand(container, option, seen, budget);
 	}
 
 	/**
-	 * The far end of the strand, drawn detached (set apart by a gap, with no guide rail
-	 * running to it) past the end of the rendered window: upward the note the current
-	 * branch was started from, downward the note it runs out at. So the reader sees where
-	 * the branch begins and ends however far short the per-direction cap cuts the walk.
-	 *
-	 * It is left out when that note is already on screen — downward `findLeaf` returns
-	 * null exactly when the farthest entry *is* the leaf, and the `visited` guard covers
-	 * the rest — and, upward, when the farthest entry is a junction card: the fork is
-	 * already the branching point on show, so a parent above it only doubles up.
+	 * The detached entry at the top: the note the current branch was started from, drawn
+	 * past the end of the rendered window so the reader sees where the branch begins
+	 * however far short the step cap cuts the walk. Left out when there is no such note
+	 * (the active note is itself the beginning) or when it is already on screen.
 	 */
-	private renderFarEnd(
-		parent: HTMLElement,
-		node: TFile,
-		direction: Direction,
-		visited: Set<string>,
-		lastIsJunction: boolean
-	): void {
+	private renderStartOfBranch(parent: HTMLElement, note: TFile, visited: Set<string>): void {
 		if (!this.graph) return;
+		const start = findParent(this.graph, note);
+		if (!start || visited.has(start.path)) return;
+		this.renderFarEndParent(parent, start);
+	}
 
-		// Upward the parent is the *active* note's own — it is that note's branch we are
-		// placing. Downward the leaf is the end of the strand **as drawn**, so a branch the
-		// reader picked (or is previewing) ends at its own leaf, not the first link's.
-		let target: TFile | null;
-		if (direction === "incoming") {
-			if (lastIsJunction || !this.activeNote) return;
-			target = findParent(this.graph, this.activeNote);
-		} else {
-			target = findLeaf(this.graph, node);
-		}
-
-		if (!target || visited.has(target.path)) return;
-		if (direction === "incoming") this.renderFarEndParent(parent, target);
-		else this.renderEntry(parent, target, direction, true);
+	/**
+	 * The detached entry at the bottom: the note the strand runs out at, taken from the
+	 * **last drawn** note, so a branch the reader picked — or is previewing — ends at
+	 * *its* leaf and not the first link's. `findLeaf` returns null exactly when the last
+	 * entry already is that leaf, which is when there is nothing to add.
+	 */
+	private renderEndOfBranch(parent: HTMLElement, node: TFile, visited: Set<string>): void {
+		if (!this.graph) return;
+		const end = findLeaf(this.graph, node);
+		if (!end || visited.has(end.path)) return;
+		this.renderEntry(parent, end, "outgoing", true);
 	}
 
 	/**
@@ -307,15 +392,20 @@ export class FolgezettelView extends ItemView {
 	 * reader the fork it came from. Used going up and on the active note; going down the
 	 * junction is drawn by `renderBranchEntry` instead.
 	 *
-	 * Picking an option **opens** it, where an outgoing junction's re-roots the strand.
-	 * That is forced by the geometry, not a whim: everything from this fork down to the
-	 * active note is fixed — it is the path to the note you are on — so a sibling's strand
-	 * cannot be drawn here without drawing something the vault does not say. Going to it
-	 * is the only way to switch. For the same reason there is no continuation to preview,
-	 * so the card has no hover behaviour.
+	 * Hovering an option previews that branch in place of **everything below the card** —
+	 * the rest of the ancestors, the active note and its continuations all belong to the
+	 * branch being looked away from, so all of them stand down for the duration. Picking
+	 * an option **opens** it, where an outgoing junction's re-roots the strand: from here
+	 * the drawn path is the one that leads to the note you are on, so going to the sibling
+	 * is the only way to actually switch to it.
 	 */
-	private renderSiblingEntry(parent: HTMLElement, file: TFile, kind: Direction | "active", options: TFile[]): void {
-		const key = branchKey(kind, file);
+	private renderSiblingEntry(
+		parent: HTMLElement,
+		file: TFile,
+		kind: EntryKind,
+		options: TFile[],
+		key: string
+	): void {
 		const expanded = this.expandedBranches.has(key);
 
 		const row = parent.createDiv({ cls: `folgezettel-entry is-branch is-${kind}${expanded ? " is-expanded" : ""}` });
@@ -327,6 +417,7 @@ export class FolgezettelView extends ItemView {
 		});
 		toggle.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
+			this.previewBranch = null;
 			if (this.expandedBranches.has(key)) this.expandedBranches.delete(key);
 			else this.expandedBranches.add(key);
 			this.render();
@@ -343,30 +434,39 @@ export class FolgezettelView extends ItemView {
 		for (const option of ordered) {
 			const el = optionList.createDiv({ cls: "folgezettel-branch-option", text: option.basename });
 			el.addEventListener("click", (event: MouseEvent) => {
+				this.previewBranch = null;
 				this.expandedBranches.delete(key);
 				void this.app.workspace.getLeaf(event.ctrlKey || event.metaKey).openFile(option);
 			});
+			// Hovering a *sibling* previews it; hovering this entry's own note restores the
+			// real strand, since that is what is drawn below anyway. Touch has no hover (and
+			// no mouseleave to clear a stuck preview), so mobile relies on tap-to-open above.
+			if (!Platform.isMobile) {
+				el.addEventListener("mouseenter", () =>
+					option.path === file.path ? this.clearPreviewBranch(key) : this.setPreviewBranch(key, option.path)
+				);
+			}
+		}
+		if (!Platform.isMobile) {
+			optionList.addEventListener("mouseleave", () => this.clearPreviewBranch(key));
 		}
 	}
 
-	/** (Re)render a junction's continuation container from its current/previewed choice. */
+	/** (Re)render everything below a card: the hovered option's strand, or the real one. */
 	private renderContinuation(key: string): void {
 		const info = this.branchContinuations.get(key);
 		if (!info) return;
 		info.container.empty();
 
-		const { options, direction, visited, budget, container } = info;
 		const preview =
-			this.previewBranch?.key === key ? options.find((f) => f.path === this.previewBranch?.path) : undefined;
-		const continueFrom = preview ?? this.selectedOption(key, options);
-		if (visited.has(continueFrom.path)) return;
-
-		const nextVisited = new Set(visited);
-		nextVisited.add(continueFrom.path);
-		this.renderStrand(container, continueFrom, direction, nextVisited, budget, true);
+			this.previewBranch?.key === key
+				? info.options.find((f) => f.path === this.previewBranch?.path)
+				: undefined;
+		if (preview) info.renderPreview(preview);
+		else info.renderDefault();
 	}
 
-	private renderEntry(parent: HTMLElement, file: TFile, kind: Direction | "active", detached = false): void {
+	private renderEntry(parent: HTMLElement, file: TFile, kind: EntryKind, detached = false): void {
 		// A note nothing continues ends the thread; its dot is drawn hollow (see Styling),
 		// so a real ending reads differently from a strand the step cap merely cut short.
 		const leaf = (this.graph?.outgoing.get(file.path)?.length ?? 0) === 0;
@@ -395,11 +495,11 @@ export class FolgezettelView extends ItemView {
 		options: TFile[],
 		key: string,
 		selected: TFile,
-		direction: Direction
+		kind: EntryKind
 	): void {
 		const expanded = this.expandedBranches.has(key);
 
-		const row = parent.createDiv({ cls: `folgezettel-entry is-branch is-${direction}${expanded ? " is-expanded" : ""}` });
+		const row = parent.createDiv({ cls: `folgezettel-entry is-branch is-${kind}${expanded ? " is-expanded" : ""}` });
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
 		const toggle = marker.createDiv({
 			cls: "folgezettel-branch-toggle",
@@ -432,11 +532,10 @@ export class FolgezettelView extends ItemView {
 				this.expandedBranches.delete(key);
 				this.render();
 			});
-			// Hovering an option previews its continuation. Works in both directions
-			// because each region grows away from the active note (see the centred
-			// layout), so the card never shifts under the cursor. Touch has no hover
-			// (and no mouseleave to clear a stuck preview), so on mobile we skip it and
-			// rely on tap-to-select — the click handler above.
+			// Hovering an option previews its continuation. The panel hangs from its top
+			// edge, so rebuilding what is below never moves the card under the cursor.
+			// Touch has no hover (and no mouseleave to clear a stuck preview), so on
+			// mobile we skip it and rely on tap-to-select — the click handler above.
 			if (!Platform.isMobile) {
 				option.addEventListener("mouseenter", () => this.setPreviewBranch(key, file.path));
 			}
@@ -498,6 +597,6 @@ export class FolgezettelView extends ItemView {
 	}
 }
 
-function branchKey(direction: Direction | "active", junction: TFile): string {
-	return `${direction}|${junction.path}`;
+function branchKey(kind: EntryKind, junction: TFile): string {
+	return `${kind}|${junction.path}`;
 }

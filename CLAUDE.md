@@ -30,13 +30,13 @@ jump commands along it. Six source files under `src/`, each a clear layer:
 - **`view.ts`** — `FolgezettelView` (an `ItemView`), constructed with the plugin so it
   can read live settings. Owns all DOM and rendering (each entry is a left gutter with
   the guide rail + a dot, then the title). Strand traversal lives here, not in
-  `graph.ts`, because it depends on pane-local branch state. Both sides are walked *and*
-  rendered together by `renderStrand(parent, from, direction, visited, budget)`, emitting
-  entries nearest → farthest; at a junction it renders the card plus a continuation
-  container (`branchContinuations`) that a hover preview can rebuild in place (see below).
-  The incoming region is flipped visually with CSS `column-reverse` so the same
-  nearest-first walk reads bottom → top. Wherever a walk stops, `renderFarEnd` appends the
-  detached far-end entry (see below). `refresh()` re-renders on demand.
+  `graph.ts`, because it depends on pane-local branch state. The panel is **one** strand,
+  drawn top to bottom: `walkUp` collects the ancestors (nearest first), `renderChain`
+  draws them farthest first, then the active note, then `renderStrand` walks and renders
+  the continuations. At a card, everything below moves into a continuation container
+  (`branchContinuations`) that a hover preview rebuilds in place (see below).
+  `renderStartOfBranch` and `renderEndOfBranch` add the detached entries at the two ends.
+  `refresh()` re-renders on demand.
 - **`navigate.ts`** — pure jump targets over a `FolgezettelGraph`, no DOM and no `App`:
   `previousNotes`/`nextNotes` (the two axes) plus `findParent`, `findLeaf`,
   `findNextJunction`, `findPreviousJunction`. Every walk carries a `visited` set, so a
@@ -61,14 +61,36 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   A's `folgezettel`). So `incoming` renders *above* the active note and `outgoing`
   renders *below* it. Do not flip these without also flipping the render order in
   `view.ts`.
-- **Active note pinned to the vertical centre.** The list is a flex column of three
-  parts: an incoming region (`flex: 1`, `column-reverse` so it's bottom-anchored and
-  grows upward), the active entry (`flex: 0 0 auto`), and an outgoing region (`flex: 1`,
-  top-anchored). Each region grows *outward* from the active note and clips at its far
-  end (`overflow: hidden`, so tall strands are cut off, not scrolled). This is not just
-  cosmetic: because every continuation grows away from the active note, a hovered branch
-  card never shifts under the cursor — the precondition that makes the hover preview
-  work in **both** directions.
+- **The list hangs from the top of the panel.** One flex column, packed at the top, and
+  scrollable (`overflow-y: auto`) so a strand taller than the pane can still be reached —
+  the bar appears only when it is needed. The active note is *not* pinned to a fixed
+  height — it sits below however many ancestors there are, and moves as the reader
+  navigates.
+
+  The scroll container carries `scrollbar-gutter: stable` and it must keep it: near the
+  overflow threshold a preview changes the strand's height, and a bar that appeared and
+  vanished with it would change the content width, rewrap titles and slide the card under
+  the cursor. The gutter costs no width: `.view-content.folgezettel-view` takes the pane's
+  right padding off and lets the reserved strip serve as it, so the bar lands flush at the
+  pane edge. That selector needs both classes — Obsidian's own
+  `.workspace-leaf-content .view-content` out-specifies a single class, which is also why
+  the plain `.folgezettel-view { padding }` rule above it has never actually applied.
+  (One case the gutter cannot cover: scrolled well down, a preview that shortens the
+  strand enough forces the browser to clamp `scrollTop`, which moves everything. It takes
+  a pane short enough to scroll *and* a card below the fold.)
+
+  This is not cosmetic. Anchoring at the top makes every row's position depend only on
+  what is **above** it, so a card can own everything below it and a hover preview can
+  replace all of that — the rest of the ancestors, the active note, its continuations —
+  without the card ever moving under the cursor. The earlier centred layout could not do
+  that: its incoming region was bottom-anchored, so rebuilding the rows between a card and
+  the active note slid the card, which is exactly the hover thrash the partial-rebuild
+  design exists to avoid.
+
+  What makes top-anchoring safe is that **no walk grows a strand upward any more.** The
+  ancestors are collected once by `walkUp` before anything is drawn, and every preview
+  runs downward through `renderStrand`. Reintroduce an upward-growing preview and the
+  anchoring breaks with it.
 - **Junctions are followed, not stopped.** When a note has 2+ neighbours in the walk
   direction, a `branch` entry is emitted and the strand continues along the chosen
   option — the reader's pick (`branchSelections`) if any, else the **first declared
@@ -101,7 +123,8 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   the view and drive `renderStrand`. They are **cleared whenever the shown note
   changes** (the `currentPath` guard in `render()`, which also treats "no note" as a
   change) but survive metadata refreshes.
-  Junction key = `` `${direction}|${junction.path}` `` (see `branchKey`).
+  Junction key = `` `${kind}|${junction.path}` ``, where `kind` is the entry's slot
+  (`incoming` / `outgoing` / `active`) — see `branchKey`.
 - **Junction-ness belongs to the note, not to the walk direction.** A note is one of
   several branches when its **parent forks** — `siblingOptions(file)` asks
   `outgoing[incoming[file][0]]` — and it carries the numbered circle wherever it is drawn:
@@ -111,18 +134,15 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   the moment the reader entered its branch (the fork was then unreachable from every note
   along it). The circle always sits on the *branch*, never on the forking note — that is
   the entry the reader is standing on and can switch away from.
-- **Upward a branch pick opens; downward it re-roots.** `renderBranchEntry` (downward)
-  re-roots the drawn strand and never opens. `renderSiblingEntry` (upward and on the
-  active row) opens the note instead, and has no hover preview. This is geometry, not
-  taste: everything from that fork down to the active note is the path to the note you are
-  on, so a sibling's strand cannot be drawn there without drawing a path the vault does not
-  contain. Going to the note is the only way to switch, and there is likewise no
-  continuation to preview.
-- **Two things wear the numbered circle upward.** A multi-parent note still gets the
-  junction card built by the walk (options = its predecessors, and picking one re-roots the
-  strand *above* it) — see the malformed-data note below. The sibling circle is the other,
-  and the common one. They can co-occur in one list; where a note qualifies for both, the
-  walk's card wins because it is the one that changes what is drawn.
+- **Every card hovers; upward a pick opens, downward it re-roots.** Both kinds of card
+  preview on hover through the same `previewBranch` / `renderContinuation` path. What
+  differs is how much they replace: an outgoing junction's continuation holds the strand
+  beyond it, while a sibling card's holds **everything below** — the remaining ancestors,
+  the active note and its continuations, all of which belong to the branch being looked
+  away from. Clicking differs for the same reason: `renderBranchEntry` (downward) re-roots
+  the drawn strand and never opens, while `renderSiblingEntry` (upward and on the active
+  row) opens the note. From above, the drawn path is the one that leads to the note you
+  are on, so going to the sibling is the only way to actually switch to it.
 - **A junction renders inline as a normal entry when collapsed.** It shows the chosen
   option's title (click opens the note) with a filled circle in the gutter carrying the
   number of options; clicking that circle expands the entry into the full option list
@@ -174,6 +194,12 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   previous note: the upward walks take `incoming[0]` to stay deterministic, and `Open
   previous note` shows the picker rather than silently guessing. This is a safeguard
   against bad data, not a supported topology — don't build features on it.
+
+  The panel once did: a multi-parent note got a junction card of its **predecessors**, and
+  picking one re-rooted the strand above it. That was removed, because it was the last walk
+  that grew a strand upward and so the last obstacle to top-anchoring the list (above).
+  `walkUp` now takes `incoming[0]` silently, like every other upward walk. Bringing it back
+  means giving up the layout — and a second meaning for the numbered circle.
 
 ### Obsidian integration points
 
@@ -232,16 +258,13 @@ instead of wrapping inside it (it is absolutely positioned, so shrink-to-fit wou
 otherwise cap its width at half the marker). When expanded, its
 `.folgezettel-branch-options` list takes the place of the title, styled to mirror
 Obsidian's search-result preview (`.search-result-file-matches` — `--search-result-background`,
-a `box-shadow` border ring, options divided by `border-bottom`). When the entry nearest
-the active row is an expanded card (each region's `:first-child`, since the walk is
-nearest-first), a small margin on its active-facing side keeps its filled background
-from butting against the active row's — `margin-top` for outgoing, `margin-bottom` for
-incoming (the region is `column-reverse`, so the nearest card sits at its bottom).
+a `box-shadow` border ring, options divided by `border-bottom`). An expanded card takes a
+small margin on both sides, so its filled background never butts against a neighbouring
+filled row — the active one above or below it, or another expanded card.
 
-The far-end entry (`.folgezettel-entry.is-detached`) is set apart by
-a margin on the side facing the strand — `margin-top` for outgoing, `margin-bottom` for
-incoming (that region is `column-reverse`, so its strand-facing side is the bottom) — and
-both `.folgezettel-marker` segments hidden. Its neighbour keeps its own segments, which
+The far-end entries (`.folgezettel-entry.is-detached`) are set apart by
+a margin on the side facing the strand — `margin-bottom` on the one at the top,
+`margin-top` on the one at the bottom — and both `.folgezettel-marker` segments hidden. Its neighbour keeps its own segments, which
 stop at the row boundary, so the guide line ends, the gap follows, and the detached entry
 carries no line at all. Above the strand it also takes the row class `is-branch` and
 carries a `.folgezettel-branch-toggle` — the same circle a junction uses, holding the
@@ -251,10 +274,11 @@ click. That beginning also takes the row class `is-root`, which leaves the circl
 rings it like a leaf, so the thread's two ends match; its rule is repeated under `:hover`
 to outrank the `.is-detached` hover fill above it.
 
-The list splits into `.folgezettel-region.is-incoming` / `.is-outgoing` (each `flex: 1`,
-`overflow: hidden`) with the active entry between them, so the active note stays
-vertically centred (see "Active note pinned to the vertical centre"). The incoming
-region uses `flex-direction: column-reverse`, so the nearest-first walk order renders
-bottom → top. Each junction's continuation is wrapped in a `.folgezettel-continuation`
-element set to `display: contents` (layout-transparent), so a hover preview can rebuild
-just that subtree without perturbing the sequence's flex layout.
+`.folgezettel-list` is a single flex column with `justify-content: flex-start`, so the
+strand hangs from the panel's top edge; `overflow-y: auto` plus `scrollbar-gutter: stable`
+scrolls it when the pane is too short without letting the bar's arrival resize the content
+(see "The list hangs from the top of the panel"). Entries carry `is-incoming` /
+`is-active` / `is-outgoing` for styling only — there is no longer a container per side.
+Everything below a card is wrapped in a `.folgezettel-continuation` element set to
+`display: contents` (layout-transparent), so a hover preview can rebuild just that subtree
+without perturbing the strand's flex layout.

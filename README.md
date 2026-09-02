@@ -48,16 +48,18 @@ maintain links in one direction.
 Open it from the ribbon (branch icon) or the command palette →
 **Open Folgezettel navigator**. It follows whatever note is active in the editor:
 
-- The **active note** is pinned to the vertical centre, marked with an accent-coloured dot.
-- Notes **leading into** it (its predecessors) stack **upward**.
-- Notes **continuing from** it stack **downward**.
+- The sequence reads straight down from the top of the panel, in the order the notes
+  continue one another.
+- The **active note** sits in it, marked with an accent-coloured dot: notes **leading
+  into** it above, notes **continuing from** it below.
 - Entries are threaded on a guide rail, each marked with a dot — a small timeline of the sequence.
 - A note **nothing continues** — the end of the thread — is marked with an open circle
   instead of a filled dot, so a thread that really ends is not mistaken for one the panel
   merely cut short at its limit.
 
-Switch to another note and the panel re-centres on it. By default it shows up to five
-notes on each side (configurable — see [Settings](#settings)).
+Switch to another note and the panel redraws around it. By default it shows up to five
+notes on each side (configurable — see [Settings](#settings)). If the pane is too short
+for the sequence it scrolls; otherwise there is no scrollbar.
 
 When the thread runs on past that limit, the panel still shows you where it goes: one
 extra entry appears **above** the sequence for the note the current branch was started
@@ -67,14 +69,13 @@ the two ends of the branch you are in the middle of. The one above wears the jun
 numbered circle when the note it names is a fork, and an open circle of that size when the
 thread simply starts there — the same open shape the note at the other end gets, so both
 ends of the thread look alike; both are markers only — there is nothing to click. Either
-entry is left out when it is already on screen, and the one above is left out when the topmost
-entry is itself a junction, which already shows you the fork.
+entry is left out when it is already on screen.
 
 ## Junctions (branches)
 
-Where the thread forks — a note with more than one continuation, or more than one note
-leading into it — the panel shows a **junction**: an entry whose plain dot is replaced by
-a filled circle carrying the number of branches you can pick from.
+Where the thread forks — a note with more than one continuation — the panel shows a
+**junction**: an entry whose plain dot is replaced by a filled circle carrying the number
+of branches you can pick from.
 
 A junction can't display every strand at once, so it follows the **first** link in the
 note's `folgezettel` property — the branch that continues the thread (see
@@ -93,10 +94,14 @@ below the active note, above it, or when it *is* the active note. Entering a bra
 costs you the fork you came from: expand the circle on the note you are on, or on any note
 above you, to see its branches and jump to one.
 
-Above the active note, picking an option **opens** that note rather than re-drawing the
-sequence. Everything between a fork and the note you are on is the path that got you
-there, so the only way to switch to a sibling branch is to go to it — which is what
-picking one does.
+Hovering an option previews that branch wherever the card sits. Above the active note
+the preview stands in for everything below the card — the rest of the sequence, your
+current note included — because all of it belongs to the branch you are looking away
+from; move the mouse off and it comes straight back.
+
+Picking an option above the active note **opens** it rather than re-drawing the sequence.
+Everything between a fork and the note you are on is the path that got you there, so the
+only way to switch to a sibling branch is to go to it — which is what picking one does.
 
 Your branch choices are remembered while you stay on the note and reset when you move to
 a different one — at which point the panel is back to following first links.
@@ -142,7 +147,7 @@ panel for as long as you stay on that note.
 
 | Action | Result |
 | --- | --- |
-| **Click** a note title | Opens the note; the panel re-centres on it |
+| **Click** a note title | Opens the note; the panel redraws around it |
 | **Ctrl/Cmd-hover** a title *(desktop)* | Obsidian's native page preview |
 | **Click** a junction's numbered circle | Expand / collapse its list of branches |
 | **Hover** a branch option *(desktop)* | Preview that strand below the card |
@@ -165,7 +170,7 @@ on touch — the rest of the workflow is identical.
    progresses — each note points at the note(s) it leads into.
 2. Keep the panel open in a sidebar while you read or write.
 3. Follow the thread upward (where this came from) and downward (where it leads) by
-   clicking titles; the panel re-centres each time.
+   clicking titles; the panel redraws each time.
 4. At a fork, expand the junction, preview the options, and choose the strand you want to
    pursue.
 

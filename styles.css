@@ -6,6 +6,15 @@
 	overflow: hidden;
 }
 
+/* No padding on the right: that side is the list's reserved scrollbar gutter instead
+   (see `.folgezettel-list`), so the strand keeps its full width and the bar, when it
+   appears, sits flush at the pane edge the way the File Explorer's does. Obsidian's own
+   `.workspace-leaf-content .view-content` rule out-specifies a plain class, so this has
+   to match its specificity to land. */
+.view-content.folgezettel-view {
+	padding-right: 0;
+}
+
 .folgezettel-empty {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
@@ -13,35 +22,33 @@
 	padding: var(--size-4-4) var(--size-4-2);
 }
 
+/* One strand, hung from the top of the panel and read straight down. Anchoring here
+   rather than on a centred active note is what makes every row's position depend only on
+   what is *above* it — so a card can own everything below it and a hover preview can
+   replace all of it, the active note included, without the card ever moving under the
+   cursor.
+
+   `overflow-y: auto` scrolls only when the pane is too short for the strand; there is no
+   bar otherwise. `scrollbar-gutter: stable` is what keeps that honest: near the overflow
+   threshold a hover preview changes the strand's height, and without a reserved gutter the
+   bar would appear and vanish with it, changing the content width, rewrapping titles and
+   sliding the card out from under the cursor — the very thrash the top anchoring exists to
+   prevent. The gutter is not extra width: the pane's right padding is taken off above in
+   favour of it, so the reserved strip *is* that padding and the bar simply lands in it. */
 .folgezettel-list {
 	flex: 1 1 auto;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-}
-
-/* Active note pinned to the vertical centre: the incoming and outgoing regions
-   split the remaining height equally and grow outward, clipping at the far ends. */
-.folgezettel-region {
-	flex: 1 1 0;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-	align-items: stretch;
-	overflow: hidden;
-}
-
-/* Incoming hugs the active note at its bottom and extends upward. Entries are
-   emitted nearest -> farthest, so column-reverse puts the nearest at the bottom
-   (against the active note) and the farthest at the top. */
-.folgezettel-region.is-incoming {
-	flex-direction: column-reverse;
 	justify-content: flex-start;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-gutter: stable;
 }
 
-/* Layout-transparent wrapper: a junction's continuation lives here so hover
-   previews can rebuild it without disturbing the sequence's flex layout. */
+/* Layout-transparent wrapper: everything below a card lives here so hover previews
+   can rebuild it without disturbing the strand's flex layout. */
 .folgezettel-continuation {
 	display: contents;
 }
@@ -236,25 +243,18 @@
 	background-color: var(--background-modifier-hover);
 }
 
-/* When the entry nearest the active note is an expanded card, its filled
-   background would butt against the active row's; add a little breathing room.
-   The nearest entry is each region's first child (nearest-first walk order):
-   just below the active note for outgoing, just above it for incoming (which is
-   column-reversed, so the gap goes on the card's bottom). */
-.folgezettel-region.is-outgoing > .folgezettel-entry.is-branch.is-expanded:first-child {
-	margin-top: var(--size-2-2);
+/* An expanded card is a filled block in a column of rows; a little air on both sides
+   keeps it from butting against a neighbouring filled row — the active one above or
+   below it, or another expanded card. */
+.folgezettel-entry.is-branch.is-expanded {
+	margin: var(--size-2-2) 0;
 }
 
-.folgezettel-region.is-incoming > .folgezettel-entry.is-branch.is-expanded:first-child {
-	margin-bottom: var(--size-2-2);
-}
-
-/* The detached far-end entry: the note the branch was started from (above the
-   incoming strand) or the note it ends at (below the outgoing one). It is not
-   adjacent to its neighbour, so it is set apart by a gap on the side facing the
-   strand — margin-top going down, margin-bottom going up, since the incoming
-   region is column-reversed — and carries no rail segments, leaving the guide
-   line stopping short of it. */
+/* The detached far-end entries: the note the branch was started from, at the very top,
+   and the note it ends at, at the very bottom. Neither is adjacent to its neighbour, so
+   each is set apart by a gap on the side facing the strand — below the one at the top,
+   above the one at the bottom — and carries no rail segments, leaving the guide line
+   stopping short of it. */
 .folgezettel-entry.is-detached.is-outgoing {
 	margin-top: var(--size-4-3);
 }
