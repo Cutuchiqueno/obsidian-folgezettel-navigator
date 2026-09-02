@@ -56,6 +56,14 @@ Open it from the ribbon (branch icon) or the command palette →
 Switch to another note and the panel re-centres on it. By default it shows up to five
 notes on each side (configurable — see [Settings](#settings)).
 
+When the thread runs on past that limit, the panel still shows you where it goes: one
+extra entry appears **above** the sequence for the note the current branch was started
+from, and one **below** it for the note the branch ends at. Both are set apart by a gap,
+with no guide rail running to them, because they are not the next note along — they are
+the two ends of the branch you are in the middle of. Either is left out when it is already
+on screen, and the one above is left out when the topmost entry is itself a junction,
+which already shows you the fork.
+
 ## Junctions (branches)
 
 Where the thread forks — a note with more than one continuation, or more than one note

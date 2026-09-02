@@ -35,7 +35,8 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   entries nearest → farthest; at a junction it renders the card plus a continuation
   container (`branchContinuations`) that a hover preview can rebuild in place (see below).
   The incoming region is flipped visually with CSS `column-reverse` so the same
-  nearest-first walk reads bottom → top. `refresh()` re-renders on demand.
+  nearest-first walk reads bottom → top. Wherever a walk stops, `renderFarEnd` appends the
+  detached far-end entry (see below). `refresh()` re-renders on demand.
 - **`navigate.ts`** — pure jump targets over a `FolgezettelGraph`, no DOM and no `App`:
   `previousNotes`/`nextNotes` (the two axes) plus `findParent`, `findLeaf`,
   `findNextJunction`, `findPreviousJunction`. Every walk carries a `visited` set, so a
@@ -74,6 +75,19 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   link** (`selectedOption`). A single neighbour is followed, zero ends the strand. The per-direction note cap is `settings.maxSteps` (default 5, configurable
   1–10; branch entries count against it). The upward chain is reversed at render time so
   top-to-bottom reads with the sequence.
+- **Each strand ends in a detached far-end entry.** Where the per-direction cap cuts a
+  walk short, `renderFarEnd` appends one extra entry past the end: upward the note the
+  current branch was started from (`findParent` from the **active** note — it is that
+  note's branch on show), downward the note the strand runs out at (`findLeaf` from the
+  **last drawn** note, so a branch the reader picked or is previewing ends at *its* leaf,
+  not the first link's). It is drawn detached — a gap on the strand-facing side, both rail
+  segments hidden — and does **not** count against `maxSteps`. Three cases draw nothing:
+  the note is already on screen (the `visited` guard; downward, `findLeaf` returns `null`
+  exactly when the farthest entry *is* the leaf), there is no such note (the active note is
+  itself the beginning), or — upward only — the farthest entry is a junction card, which is
+  already the fork a parent would point at. Because it is emitted where the walk stops, it
+  lands inside the innermost continuation container, so `renderContinuation` rebuilds it
+  with the rest of a hover preview instead of leaving a stale leaf behind.
 - **Branch state is pane-local and per-note.** `expandedBranches` (which junction
   cards are open) and `branchSelections` (junction key → chosen option path) live on
   the view and drive `renderStrand`. They are **cleared whenever the shown note
@@ -187,6 +201,13 @@ the active row is an expanded card (each region's `:first-child`, since the walk
 nearest-first), a small margin on its active-facing side keeps its filled background
 from butting against the active row's — `margin-top` for outgoing, `margin-bottom` for
 incoming (the region is `column-reverse`, so the nearest card sits at its bottom).
+
+The far-end entry (`.folgezettel-entry.is-detached`) is set apart rather than restyled:
+a margin on the side facing the strand — `margin-top` for outgoing, `margin-bottom` for
+incoming (that region is `column-reverse`, so its strand-facing side is the bottom) — and
+both `.folgezettel-marker` segments hidden. Its neighbour keeps its own segments, which
+stop at the row boundary, so the guide line ends, the gap follows, and the detached entry
+carries no line at all.
 
 The list splits into `.folgezettel-region.is-incoming` / `.is-outgoing` (each `flex: 1`,
 `overflow: hidden`) with the active entry between them, so the active note stays

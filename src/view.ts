@@ -16,6 +16,7 @@
 
 import { HoverPopover, ItemView, Platform, TFile, WorkspaceLeaf } from "obsidian";
 import { buildGraph, FolgezettelGraph } from "./graph";
+import { findLeaf, findParent } from "./navigate";
 import type FolgezettelPlugin from "./main";
 
 export const VIEW_TYPE_FOLGEZETTEL = "folgezettel-navigator-view";
@@ -31,6 +32,8 @@ export class FolgezettelView extends ItemView {
 
 	/** Active note the current pane state belongs to; state resets when it changes. */
 	private currentPath: string | null = null;
+	/** The active note itself — the walk `findParent` starts from (see `renderFarEnd`). */
+	private activeNote: TFile | null = null;
 	/** Junction keys whose option list is expanded. */
 	private expandedBranches = new Set<string>();
 	/** Junction key -> chosen option path (overrides the first-link default). */
@@ -121,6 +124,7 @@ export class FolgezettelView extends ItemView {
 			this.branchSelections.clear();
 			this.previewBranch = null;
 		}
+		this.activeNote = note;
 
 		if (!note) {
 			el.createDiv({ cls: "folgezettel-empty", text: "Open a note to see its Folgezettel sequence." });
@@ -153,16 +157,27 @@ export class FolgezettelView extends ItemView {
 	 * branch card, then a continuation container holding the strand beyond it, and
 	 * recurses into that container along the chosen (or hover-previewed) option.
 	 * Entries are emitted nearest -> farthest; CSS flips the incoming region visually.
+	 * Wherever the walk stops short, `renderFarEnd` adds the detached far-end entry.
 	 */
-	private renderStrand(parent: HTMLElement, from: TFile, direction: Direction, visited: Set<string>, budget: number): void {
+	private renderStrand(
+		parent: HTMLElement,
+		from: TFile,
+		direction: Direction,
+		visited: Set<string>,
+		budget: number,
+		afterJunction = false
+	): void {
 		const edges = this.graph?.[direction];
 		if (!edges) return;
 		let node = from;
 		let remaining = budget;
+		// Is the farthest entry drawn so far a junction card? True only while this segment
+		// has drawn nothing of its own and the entry it continues from was one.
+		let lastIsJunction = afterJunction;
 
 		for (let i = 0; i < MAX_ITERATIONS && remaining > 0; i++) {
 			const neighbours = edges.get(node.path) ?? [];
-			if (neighbours.length === 0) return;
+			if (neighbours.length === 0) break;
 
 			if (neighbours.length >= 2) {
 				const key = branchKey(direction, node);
@@ -173,16 +188,54 @@ export class FolgezettelView extends ItemView {
 				const container = parent.createDiv({ cls: "folgezettel-continuation" });
 				this.branchContinuations.set(key, { container, options: neighbours, direction, visited: new Set(visited), budget: remaining });
 				this.renderContinuation(key);
-				return; // the recursion owns the strand beyond the card
+				return; // the recursion owns the strand beyond the card — far end included
 			}
 
 			const next = neighbours[0];
-			if (visited.has(next.path)) return;
+			if (visited.has(next.path)) break;
 			visited.add(next.path);
 			this.renderEntry(parent, next, direction);
 			remaining--;
+			lastIsJunction = false;
 			node = next;
 		}
+
+		this.renderFarEnd(parent, node, direction, visited, lastIsJunction);
+	}
+
+	/**
+	 * The far end of the strand, drawn detached (set apart by a gap, with no guide rail
+	 * running to it) past the end of the rendered window: upward the note the current
+	 * branch was started from, downward the note it runs out at. So the reader sees where
+	 * the branch begins and ends however far short the per-direction cap cuts the walk.
+	 *
+	 * It is left out when that note is already on screen — downward `findLeaf` returns
+	 * null exactly when the farthest entry *is* the leaf, and the `visited` guard covers
+	 * the rest — and, upward, when the farthest entry is a junction card: the fork is
+	 * already the branching point on show, so a parent above it only doubles up.
+	 */
+	private renderFarEnd(
+		parent: HTMLElement,
+		node: TFile,
+		direction: Direction,
+		visited: Set<string>,
+		lastIsJunction: boolean
+	): void {
+		if (!this.graph) return;
+
+		// Upward the parent is the *active* note's own — it is that note's branch we are
+		// placing. Downward the leaf is the end of the strand **as drawn**, so a branch the
+		// reader picked (or is previewing) ends at its own leaf, not the first link's.
+		let target: TFile | null;
+		if (direction === "incoming") {
+			if (lastIsJunction || !this.activeNote) return;
+			target = findParent(this.graph, this.activeNote);
+		} else {
+			target = findLeaf(this.graph, node);
+		}
+
+		if (!target || visited.has(target.path)) return;
+		this.renderEntry(parent, target, direction, true);
 	}
 
 	/**
@@ -211,11 +264,11 @@ export class FolgezettelView extends ItemView {
 
 		const nextVisited = new Set(visited);
 		nextVisited.add(continueFrom.path);
-		this.renderStrand(container, continueFrom, direction, nextVisited, budget);
+		this.renderStrand(container, continueFrom, direction, nextVisited, budget, true);
 	}
 
-	private renderEntry(parent: HTMLElement, file: TFile, kind: Direction | "active"): void {
-		const row = parent.createDiv({ cls: `folgezettel-entry is-${kind}` });
+	private renderEntry(parent: HTMLElement, file: TFile, kind: Direction | "active", detached = false): void {
+		const row = parent.createDiv({ cls: `folgezettel-entry is-${kind}${detached ? " is-detached" : ""}` });
 
 		// Left gutter: the indentation guide rail and a dot marking the note — accent
 		// for the active note, muted for the rest (colour is set in CSS).

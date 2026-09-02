@@ -222,3 +222,22 @@
 .folgezettel-region.is-incoming > .folgezettel-entry.is-branch.is-expanded:first-child {
 	margin-bottom: var(--size-2-2);
 }
+
+/* The detached far-end entry: the note the branch was started from (above the
+   incoming strand) or the note it ends at (below the outgoing one). It is not
+   adjacent to its neighbour, so it is set apart by a gap on the side facing the
+   strand — margin-top going down, margin-bottom going up, since the incoming
+   region is column-reversed — and carries no rail segments, leaving the guide
+   line stopping short of it. */
+.folgezettel-entry.is-detached.is-outgoing {
+	margin-top: var(--size-4-3);
+}
+
+.folgezettel-entry.is-detached.is-incoming {
+	margin-bottom: var(--size-4-3);
+}
+
+.folgezettel-entry.is-detached .folgezettel-marker::before,
+.folgezettel-entry.is-detached .folgezettel-marker::after {
+	display: none;
+}
