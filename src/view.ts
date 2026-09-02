@@ -146,7 +146,9 @@ export class FolgezettelView extends ItemView {
 		const incomingEl = list.createDiv({ cls: "folgezettel-region is-incoming" });
 		this.renderStrand(incomingEl, note, "incoming", new Set<string>([note.path]), maxSteps);
 
-		this.renderEntry(list, note, "active");
+		const activeSiblings = this.siblingOptions(note);
+		if (activeSiblings) this.renderSiblingEntry(list, note, "active", activeSiblings);
+		else this.renderEntry(list, note, "active");
 
 		const outgoingEl = list.createDiv({ cls: "folgezettel-region is-outgoing" });
 		this.renderStrand(outgoingEl, note, "outgoing", new Set<string>([note.path]), maxSteps);
@@ -194,7 +196,13 @@ export class FolgezettelView extends ItemView {
 			const next = neighbours[0];
 			if (visited.has(next.path)) break;
 			visited.add(next.path);
-			this.renderEntry(parent, next, direction);
+			// Walking up, `neighbours` counts predecessors, which says nothing about whether
+			// this note is one of several *branches* — that is a property of its parent's
+			// fork, so ask for it separately. Downward the junction case above already
+			// covers it: there the branch entry *is* the chosen sibling.
+			const siblings = direction === "incoming" ? this.siblingOptions(next) : null;
+			if (siblings) this.renderSiblingEntry(parent, next, direction, siblings);
+			else this.renderEntry(parent, next, direction);
 			remaining--;
 			lastIsJunction = false;
 			node = next;
@@ -248,6 +256,70 @@ export class FolgezettelView extends ItemView {
 	private selectedOption(key: string, options: TFile[]): TFile {
 		const stored = this.branchSelections.get(key);
 		return options.find((f) => f.path === stored) ?? options[0];
+	}
+
+	/**
+	 * The branches `file` is one of: its parent's continuations, when the parent forks.
+	 * Null when the parent has just this one continuation, or there is no parent — the
+	 * entry is then an ordinary note in the strand.
+	 *
+	 * Which note counts as the parent is the deterministic `incoming[0]`, the same pick
+	 * the upward walks in `navigate.ts` make when a vault gives a note two predecessors.
+	 */
+	private siblingOptions(file: TFile): TFile[] | null {
+		if (!this.graph) return null;
+		const parent = this.graph.incoming.get(file.path)?.[0];
+		if (!parent) return null;
+		const options = this.graph.outgoing.get(parent.path) ?? [];
+		return options.length >= 2 ? options : null;
+	}
+
+	/**
+	 * An entry that is one of several branches at a fork, drawn with the same numbered
+	 * circle as a junction — because it *is* one: entering a branch must not cost the
+	 * reader the fork it came from. Used going up and on the active note; going down the
+	 * junction is drawn by `renderBranchEntry` instead.
+	 *
+	 * Picking an option **opens** it, where an outgoing junction's re-roots the strand.
+	 * That is forced by the geometry, not a whim: everything from this fork down to the
+	 * active note is fixed — it is the path to the note you are on — so a sibling's strand
+	 * cannot be drawn here without drawing something the vault does not say. Going to it
+	 * is the only way to switch. For the same reason there is no continuation to preview,
+	 * so the card has no hover behaviour.
+	 */
+	private renderSiblingEntry(parent: HTMLElement, file: TFile, kind: Direction | "active", options: TFile[]): void {
+		const key = branchKey(kind, file);
+		const expanded = this.expandedBranches.has(key);
+
+		const row = parent.createDiv({ cls: `folgezettel-entry is-branch is-${kind}${expanded ? " is-expanded" : ""}` });
+		const marker = row.createDiv({ cls: "folgezettel-marker" });
+		const toggle = marker.createDiv({
+			cls: "folgezettel-branch-toggle",
+			text: String(options.length),
+			attr: { "aria-label": `Show ${options.length} branches` },
+		});
+		toggle.addEventListener("click", (event: MouseEvent) => {
+			event.preventDefault();
+			if (this.expandedBranches.has(key)) this.expandedBranches.delete(key);
+			else this.expandedBranches.add(key);
+			this.render();
+		});
+
+		if (!expanded) {
+			this.renderTitleLink(row, file);
+			return;
+		}
+
+		// This note leads the list, as the chosen option does on an outgoing junction.
+		const ordered = [file, ...options.filter((f) => f.path !== file.path)];
+		const optionList = row.createDiv({ cls: "folgezettel-branch-options" });
+		for (const option of ordered) {
+			const el = optionList.createDiv({ cls: "folgezettel-branch-option", text: option.basename });
+			el.addEventListener("click", (event: MouseEvent) => {
+				this.expandedBranches.delete(key);
+				void this.app.workspace.getLeaf(event.ctrlKey || event.metaKey).openFile(option);
+			});
+		}
 	}
 
 	/** (Re)render a junction's continuation container from its current/previewed choice. */
@@ -393,6 +465,6 @@ export class FolgezettelView extends ItemView {
 	}
 }
 
-function branchKey(direction: Direction, junction: TFile): string {
+function branchKey(direction: Direction | "active", junction: TFile): string {
 	return `${direction}|${junction.path}`;
 }

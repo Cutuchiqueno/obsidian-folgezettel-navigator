@@ -82,6 +82,16 @@ To explore the alternatives:
 3. **Click an option** to choose it. The card collapses and the sequence re-roots along
    your pick.
 
+A note that is one of several branches keeps its numbered circle wherever it appears —
+below the active note, above it, or when it *is* the active note. Entering a branch never
+costs you the fork you came from: expand the circle on the note you are on, or on any note
+above you, to see its branches and jump to one.
+
+Above the active note, picking an option **opens** that note rather than re-drawing the
+sequence. Everything between a fork and the note you are on is the path that got you
+there, so the only way to switch to a sibling branch is to go to it — which is what
+picking one does.
+
 Your branch choices are remembered while you stay on the note and reset when you move to
 a different one — at which point the panel is back to following first links.
 

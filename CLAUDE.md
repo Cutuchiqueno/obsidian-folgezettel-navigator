@@ -81,7 +81,10 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   note's branch on show), downward the note the strand runs out at (`findLeaf` from the
   **last drawn** note, so a branch the reader picked or is previewing ends at *its* leaf,
   not the first link's). It is drawn detached — a gap on the strand-facing side, both rail
-  segments hidden — and does **not** count against `maxSteps`. Three cases draw nothing:
+  segments hidden — and does **not** count against `maxSteps`. A sibling circle does *not*
+  count as "the farthest entry is a junction card" for the rule below — that keys on a
+  junction the **walk** produced, which is the one that ends the walk. Three cases draw
+  nothing:
   the note is already on screen (the `visited` guard; downward, `findLeaf` returns `null`
   exactly when the farthest entry *is* the leaf), there is no such note (the active note is
   itself the beginning), or — upward only — the farthest entry is a junction card, which is
@@ -94,6 +97,27 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   changes** (the `currentPath` guard in `render()`, which also treats "no note" as a
   change) but survive metadata refreshes.
   Junction key = `` `${direction}|${junction.path}` `` (see `branchKey`).
+- **Junction-ness belongs to the note, not to the walk direction.** A note is one of
+  several branches when its **parent forks** — `siblingOptions(file)` asks
+  `outgoing[incoming[file][0]]` — and it carries the numbered circle wherever it is drawn:
+  below the active note, above it, or *as* the active note. Do not go back to reading it
+  off `edges = graph[direction]`: upward that counts a note's **predecessors**, which is a
+  different question, and answering it there is what used to make a note lose its circle
+  the moment the reader entered its branch (the fork was then unreachable from every note
+  along it). The circle always sits on the *branch*, never on the forking note — that is
+  the entry the reader is standing on and can switch away from.
+- **Upward a branch pick opens; downward it re-roots.** `renderBranchEntry` (downward)
+  re-roots the drawn strand and never opens. `renderSiblingEntry` (upward and on the
+  active row) opens the note instead, and has no hover preview. This is geometry, not
+  taste: everything from that fork down to the active note is the path to the note you are
+  on, so a sibling's strand cannot be drawn there without drawing a path the vault does not
+  contain. Going to the note is the only way to switch, and there is likewise no
+  continuation to preview.
+- **Two things wear the numbered circle upward.** A multi-parent note still gets the
+  junction card built by the walk (options = its predecessors, and picking one re-roots the
+  strand *above* it) — see the malformed-data note below. The sibling circle is the other,
+  and the common one. They can co-occur in one list; where a note qualifies for both, the
+  walk's card wins because it is the one that changes what is drawn.
 - **A junction renders inline as a normal entry when collapsed.** It shows the chosen
   option's title (click opens the note) with a filled circle in the gutter carrying the
   number of options; clicking that circle expands the entry into the full option list

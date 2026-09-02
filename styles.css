@@ -124,6 +124,18 @@
 	background-color: var(--interactive-accent);
 }
 
+/* The active note carries the branch circle too when it is one of several branches
+   at its fork; it keeps the accent the dot would have had, with the count knocked
+   out in the matching on-accent colour. */
+.folgezettel-entry.is-active .folgezettel-branch-toggle {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.folgezettel-entry.is-active .folgezettel-branch-toggle:hover {
+	background-color: var(--interactive-accent-hover);
+}
+
 .folgezettel-title {
 	flex: 1 1 auto;
 	min-width: 0;
