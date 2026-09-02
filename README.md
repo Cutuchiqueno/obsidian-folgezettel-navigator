@@ -36,8 +36,11 @@ folgezettel:
 ```
 
 - Links are ordinary Obsidian wikilinks (aliases are tolerated, no unique note identifier is required for the filename of a note).
-- A note may point to **several** continuations — that's an *outgoing* branch.
-- A note may be pointed to by **several** notes — that's an *incoming* branch.
+- A note may point to **several** continuations — that is a branch, and the panel lets
+  you see and pick between them.
+- A note should be pointed to by **at most one** note. Two notes continuing into the same
+  note is a loose end rather than a branch: the panel quietly follows the first of them,
+  and *Open previous note* asks which one you meant.
 
 The property is written in reading order: it lists what comes **next**. The plugin
 derives the reverse direction ("what came before") automatically, so you only ever
@@ -45,17 +48,26 @@ maintain links in one direction.
 
 ## The panel
 
-Open it from the ribbon (branch icon) or the command palette →
-**Open Folgezettel navigator**. It follows whatever note is active in the editor:
+Open it from the ribbon (branch icon, *Open Folgezettel navigator*) or the command palette
+→ **Folgezettel Navigator: Open panel**. It follows whatever note is active in the editor:
 
 - The sequence reads straight down from the top of the panel, in the order the notes
-  continue one another.
-- The **active note** sits in it, marked with an accent-coloured dot: notes **leading
-  into** it above, notes **continuing from** it below.
-- Entries are threaded on a guide rail, each marked with a dot — a small timeline of the sequence.
-- A note **nothing continues** — the end of the thread — is marked with an open circle
-  instead of a filled dot, so a thread that really ends is not mistaken for one the panel
-  merely cut short at its limit.
+  continue one another: notes **leading into** the active note above it, notes
+  **continuing from** it below.
+- Entries are threaded on a guide rail — a small timeline of the sequence.
+
+The marker on that rail tells you what kind of note each entry is:
+
+| Marker | Meaning |
+| --- | --- |
+| Filled dot | A note in the sequence |
+| Filled circle with a number | A note that branches, and how many branches it has |
+| Small open circle | A note nothing continues — the end of the thread |
+| Large open circle | The beginning of the structure |
+
+Whichever marker it has, the note you are on is drawn in the accent colour. The number
+lets you size up a fork without opening it, and the open circles keep a thread that
+genuinely ends distinct from one the panel merely cut short at its limit.
 
 Switch to another note and the panel redraws around it. By default it shows up to five
 notes on each side (configurable — see [Settings](#settings)). If the pane is too short
@@ -85,25 +97,22 @@ To explore the alternatives:
 
 1. **Click the numbered circle.** The row *below* it — the one that starts the current
    branch — turns into a card listing every option, your current choice first and already
-   highlighted, styled like Obsidian's search-result previews. That row drops its dot while
+   highlighted, styled like Obsidian's search-result previews. That row drops its marker while
    the card is open, since it now stands for a choice rather than for one note.
-2. **Hover an option** *(desktop)* to preview where that strand leads — the sequence
-   beyond the junction updates live, without committing to it.
-3. **Click an option** to choose it. The card collapses and the sequence re-roots along
-   your pick.
+2. **Hover an option** *(desktop)* to see where that branch leads, without committing to
+   it. Move the pointer away and the sequence comes straight back.
+3. **Click an option** to take it. Below the active note the sequence re-roots along your
+   pick without leaving the note you are on; above it, the option opens — see below.
 
 A forking note keeps its circle wherever it appears — below the active note, above it, or
 when it *is* the active note. Entering a branch never costs you the fork you came from:
 expand the circle on any note above you to see its branches and jump to one.
 
-Hovering an option previews that branch wherever the card sits. Above the active note
-the preview stands in for everything below the card — the rest of the sequence, your
-current note included — because all of it belongs to the branch you are looking away
-from; move the mouse off and it comes straight back.
-
-Picking an option above the active note **opens** it rather than re-drawing the sequence.
-Everything between a fork and the note you are on is the path that got you there, so the
-only way to switch to a sibling branch is to go to it — which is what picking one does.
+Above the active note, the preview stands in for everything below the card — the rest of
+the sequence, your current note included — because all of it belongs to the branch you are
+looking away from. And picking an option there **opens** that note rather than re-drawing
+the sequence: everything between a fork and the note you are on is the path that got you
+there, so the only way to switch to a sibling branch is to go to it.
 
 Your branch choices are remembered while you stay on the note and reset when you move to
 a different one — at which point the panel is back to following first links.
@@ -150,10 +159,11 @@ panel for as long as you stay on that note.
 | Action | Result |
 | --- | --- |
 | **Click** a note title | Opens the note; the panel redraws around it |
-| **Ctrl/Cmd-hover** a title *(desktop)* | Obsidian's native page preview |
-| **Click** a junction's numbered circle | Expand / collapse its list of branches |
-| **Hover** a branch option *(desktop)* | Preview that strand below the card |
-| **Click** a branch option | Choose that strand (does **not** open the note) |
+| **Hover** a title *(desktop)* | Obsidian's native page preview, following your Page preview setting |
+| **Click** a junction's numbered circle | Expand / collapse the list of its branches, on the row below |
+| **Hover** a branch option *(desktop)* | Preview that branch, without committing to it |
+| **Click** a branch option *below* the active note | Take that branch (does **not** open the note) |
+| **Click** a branch option *above* the active note | Opens that note |
 | **Navigation command** (palette / hotkey) | Jumps the current tab along the sequence |
 
 On a junction entry the two targets do different things: clicking the **title** opens the
@@ -162,7 +172,7 @@ note, while clicking the **numbered circle** opens the branch list.
 ### On mobile
 
 The plugin works on Obsidian Mobile. Everything is tap-driven: tap a title to open it,
-tap a junction's numbered circle to expand it, tap an option to choose a strand. The
+tap a junction's numbered circle to expand it, tap an option to take that branch. The
 hover-only previews (branch preview and page preview) are desktop affordances and are simply absent
 on touch — the rest of the workflow is identical.
 
@@ -173,7 +183,7 @@ on touch — the rest of the workflow is identical.
 2. Keep the panel open in a sidebar while you read or write.
 3. Follow the thread upward (where this came from) and downward (where it leads) by
    clicking titles; the panel redraws each time.
-4. At a fork, expand the junction, preview the options, and choose the strand you want to
+4. At a fork, expand the junction, preview the options, and take the branch you want to
    pursue.
 
 ## Settings
