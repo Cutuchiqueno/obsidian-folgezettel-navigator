@@ -81,14 +81,19 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   note's branch on show), downward the note the strand runs out at (`findLeaf` from the
   **last drawn** note, so a branch the reader picked or is previewing ends at *its* leaf,
   not the first link's). It is drawn detached — a gap on the strand-facing side, both rail
-  segments hidden — and does **not** count against `maxSteps`. A sibling circle does *not*
-  count as "the farthest entry is a junction card" for the rule below — that keys on a
-  junction the **walk** produced, which is the one that ends the walk. Three cases draw
-  nothing:
-  the note is already on screen (the `visited` guard; downward, `findLeaf` returns `null`
-  exactly when the farthest entry *is* the leaf), there is no such note (the active note is
-  itself the beginning), or — upward only — the farthest entry is a junction card, which is
-  already the fork a parent would point at. Because it is emitted where the walk stops, it
+  segments hidden — and does **not** count against `maxSteps`. Upward it is drawn by
+  `renderFarEndParent`, which gives it the junction's numbered circle when that note forks
+  and, when it does not, the open circle a leaf gets at that same size (the beginning of
+  the structure, the thread's other end) — visual only, with no expand handler, because
+  everything between it and the active note is fixed and so there is nothing to choose.
+  Downward it keeps the ordinary dot, hollow because a leaf always is. A sibling circle
+  does *not* count as "the farthest entry is a junction card" for the rule below — that
+  keys on a junction the **walk** produced, which is the one that ends the walk. Three
+  cases draw nothing: the note is already on screen (the `visited` guard; downward,
+  `findLeaf` returns `null` exactly when the farthest entry *is* the leaf), there is no
+  such note (the active note is itself the beginning), or — upward only — the farthest
+  entry is a junction card, which is already the fork a parent would point at. Because it
+  is emitted where the walk stops, it
   lands inside the innermost continuation container, so `renderContinuation` rebuilds it
   with the rest of a hover preview instead of leaving a stale leaf behind.
 - **Branch state is pane-local and per-note.** `expandedBranches` (which junction
@@ -202,7 +207,14 @@ Non-obvious pitfall when touching the entry markup/styling:
 
 A sequence note shows a filled dot (`.folgezettel-dot`) in the gutter — `--nav-item-color`
 (the muted title gray) for sequence notes, `--interactive-accent` for the active (pivot)
-note. The gutter icon sits at the entry's **vertical centre** (`top: 50%`); the marker is
+note. A **leaf** — a note nothing continues — keeps that size and colour but is drawn
+hollow: `background-color: transparent` plus an inset `box-shadow` ring of
+`--fz-ring-width`, which leaves the shape exactly `--fz-icon-size` across so the rail gaps
+still line up (a border would grow the box). It applies to the active note too, and marks
+a thread that really ends apart from one `maxSteps` merely cut short. A junction or
+sibling entry has no dot at all, so its numbered circle keeps the slot even when the
+option it names is a leaf. The gutter icon sits at the entry's **vertical centre**
+(`top: 50%`); the marker is
 `align-items: stretch`, so it spans the entry's full height and the icon stays centred
 however many lines the title wraps to (the title's small left padding sets the
 gutter-to-text gap). The indentation rail is drawn per entry as **two** guide segments,
@@ -226,12 +238,18 @@ nearest-first), a small margin on its active-facing side keeps its filled backgr
 from butting against the active row's — `margin-top` for outgoing, `margin-bottom` for
 incoming (the region is `column-reverse`, so the nearest card sits at its bottom).
 
-The far-end entry (`.folgezettel-entry.is-detached`) is set apart rather than restyled:
+The far-end entry (`.folgezettel-entry.is-detached`) is set apart by
 a margin on the side facing the strand — `margin-top` for outgoing, `margin-bottom` for
 incoming (that region is `column-reverse`, so its strand-facing side is the bottom) — and
 both `.folgezettel-marker` segments hidden. Its neighbour keeps its own segments, which
 stop at the row boundary, so the guide line ends, the gap follows, and the detached entry
-carries no line at all.
+carries no line at all. Above the strand it also takes the row class `is-branch` and
+carries a `.folgezettel-branch-toggle` — the same circle a junction uses, holding the
+fork's count or, at the beginning of the structure, nothing at all — with the hover fill
+and the pointer cursor taken back off under `.is-detached`, since there is nothing here to
+click. That beginning also takes the row class `is-root`, which leaves the circle empty and
+rings it like a leaf, so the thread's two ends match; its rule is repeated under `:hover`
+to outrank the `.is-detached` hover fill above it.
 
 The list splits into `.folgezettel-region.is-incoming` / `.is-outgoing` (each `flex: 1`,
 `overflow: hidden`) with the active entry between them, so the active note stays

@@ -243,7 +243,34 @@ export class FolgezettelView extends ItemView {
 		}
 
 		if (!target || visited.has(target.path)) return;
-		this.renderEntry(parent, target, direction, true);
+		if (direction === "incoming") this.renderFarEndParent(parent, target);
+		else this.renderEntry(parent, target, direction, true);
+	}
+
+	/**
+	 * The far-end entry above the strand: the note the current branch was started from.
+	 * It carries the junction's numbered circle when that note forks — so the fork it
+	 * stands for stays legible from here — and, when it does not, the open circle a leaf
+	 * gets at that same size: this is the beginning of the structure, the thread's other
+	 * end. Neither is a control: everything between this note and the active one is fixed,
+	 * so there is nothing here to choose.
+	 * The title still opens the note, as on every entry.
+	 */
+	private renderFarEndParent(parent: HTMLElement, file: TFile): void {
+		const options = this.graph?.outgoing.get(file.path) ?? [];
+		const forks = options.length >= 2;
+
+		const row = parent.createDiv({
+			cls: `folgezettel-entry is-branch is-incoming is-detached${forks ? "" : " is-root"}`,
+		});
+		const marker = row.createDiv({ cls: "folgezettel-marker" });
+		marker.createDiv({
+			cls: "folgezettel-branch-toggle",
+			text: forks ? String(options.length) : "",
+			attr: { "aria-label": forks ? `Forks into ${options.length} notes` : "Beginning of the structure" },
+		});
+
+		this.renderTitleLink(row, file);
 	}
 
 	/**
@@ -340,10 +367,16 @@ export class FolgezettelView extends ItemView {
 	}
 
 	private renderEntry(parent: HTMLElement, file: TFile, kind: Direction | "active", detached = false): void {
-		const row = parent.createDiv({ cls: `folgezettel-entry is-${kind}${detached ? " is-detached" : ""}` });
+		// A note nothing continues ends the thread; its dot is drawn hollow (see Styling),
+		// so a real ending reads differently from a strand the step cap merely cut short.
+		const leaf = (this.graph?.outgoing.get(file.path)?.length ?? 0) === 0;
+		const row = parent.createDiv({
+			cls: `folgezettel-entry is-${kind}${detached ? " is-detached" : ""}${leaf ? " is-leaf" : ""}`,
+		});
 
-		// Left gutter: the indentation guide rail and a dot marking the note — accent
-		// for the active note, muted for the rest (colour is set in CSS).
+		// Left gutter: the indentation guide rail and a dot marking the note — accent for
+		// the active note, muted for the rest, hollow when the note is a leaf (colour is
+		// set in CSS).
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
 		marker.createDiv({ cls: "folgezettel-dot" });
 

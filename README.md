@@ -52,6 +52,9 @@ Open it from the ribbon (branch icon) or the command palette →
 - Notes **leading into** it (its predecessors) stack **upward**.
 - Notes **continuing from** it stack **downward**.
 - Entries are threaded on a guide rail, each marked with a dot — a small timeline of the sequence.
+- A note **nothing continues** — the end of the thread — is marked with an open circle
+  instead of a filled dot, so a thread that really ends is not mistaken for one the panel
+  merely cut short at its limit.
 
 Switch to another note and the panel re-centres on it. By default it shows up to five
 notes on each side (configurable — see [Settings](#settings)).
@@ -60,9 +63,12 @@ When the thread runs on past that limit, the panel still shows you where it goes
 extra entry appears **above** the sequence for the note the current branch was started
 from, and one **below** it for the note the branch ends at. Both are set apart by a gap,
 with no guide rail running to them, because they are not the next note along — they are
-the two ends of the branch you are in the middle of. Either is left out when it is already
-on screen, and the one above is left out when the topmost entry is itself a junction,
-which already shows you the fork.
+the two ends of the branch you are in the middle of. The one above wears the junction's
+numbered circle when the note it names is a fork, and an open circle of that size when the
+thread simply starts there — the same open shape the note at the other end gets, so both
+ends of the thread look alike; both are markers only — there is nothing to click. Either
+entry is left out when it is already on screen, and the one above is left out when the topmost
+entry is itself a junction, which already shows you the fork.
 
 ## Junctions (branches)
 

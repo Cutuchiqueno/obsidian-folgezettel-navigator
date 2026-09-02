@@ -73,6 +73,7 @@
 .folgezettel-marker {
 	--fz-icon-size: 8px;
 	--fz-rail-gap: var(--size-2-1);
+	--fz-ring-width: 1.5px;
 	position: relative;
 	flex: 0 0 auto;
 	width: var(--size-4-6);
@@ -122,6 +123,19 @@
 
 .folgezettel-entry.is-active .folgezettel-dot {
 	background-color: var(--interactive-accent);
+}
+
+/* A leaf — a note nothing continues — is drawn as an open circle: the thread really
+   ends there, as against a strand the step cap merely cut short. The ring is an inset
+   box-shadow, not a border, so the dot keeps the exact size the rail gap is cut for. */
+.folgezettel-entry.is-leaf .folgezettel-dot {
+	background-color: transparent;
+	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--nav-item-color);
+}
+
+.folgezettel-entry.is-active.is-leaf .folgezettel-dot {
+	background-color: transparent;
+	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--interactive-accent);
 }
 
 /* The active note carries the branch circle too when it is one of several branches
@@ -252,4 +266,25 @@
 .folgezettel-entry.is-detached .folgezettel-marker::before,
 .folgezettel-entry.is-detached .folgezettel-marker::after {
 	display: none;
+}
+
+/* The far end above the strand carries the branch circle's shape but none of its
+   behaviour — it is a signpost for where the branch started, not a control — so the
+   hover fill and the pointer cursor come back off. Its circle is empty when that note
+   does not fork: the beginning of the structure. */
+.folgezettel-entry.is-detached .folgezettel-branch-toggle {
+	cursor: default;
+}
+
+.folgezettel-entry.is-detached .folgezettel-branch-toggle:hover {
+	background-color: var(--nav-item-color);
+}
+
+/* The beginning of the structure is drawn the way a leaf is — an open circle — at the
+   branch circle's size, so both ends of the thread read alike and only the forks in
+   between are filled. The :hover selector repeats it to outrank the rule above. */
+.folgezettel-entry.is-root .folgezettel-branch-toggle,
+.folgezettel-entry.is-root .folgezettel-branch-toggle:hover {
+	background-color: transparent;
+	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--nav-item-color);
 }
