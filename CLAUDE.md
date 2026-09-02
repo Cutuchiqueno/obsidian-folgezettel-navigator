@@ -1,6 +1,8 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+It covers this plugin's own architecture and design decisions. For conventions generic to any Obsidian
+plugin, see `AGENTS.md`.
 
 ## Commands
 
@@ -16,8 +18,8 @@ vault's `.obsidian/plugins/folgezettel-navigator/` and reload Obsidian.
 
 ## Architecture
 
-An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar. Four
-source files under `src/`, each a clear layer:
+An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar and exposes
+jump commands along it. Six source files under `src/`, each a clear layer:
 
 - **`graph.ts`** — pure data layer, no DOM. `buildGraph(app, propertyName)` scans every
   markdown file's configured Folgezettel frontmatter property (default `folgezettel`,
@@ -34,11 +36,22 @@ source files under `src/`, each a clear layer:
   container (`branchContinuations`) that a hover preview can rebuild in place (see below).
   The incoming region is flipped visually with CSS `column-reverse` so the same
   nearest-first walk reads bottom → top. `refresh()` re-renders on demand.
+- **`navigate.ts`** — pure jump targets over a `FolgezettelGraph`, no DOM and no `App`:
+  `previousNotes`/`nextNotes` (the two axes) plus `findParent`, `findLeaf`,
+  `findNextJunction`, `findPreviousJunction`. Every walk carries a `visited` set, so a
+  link cycle terminates the loop rather than hanging it. Kept free of Obsidian objects
+  beyond `TFile` so the walks can be exercised against a plain graph.
+- **`commands.ts`** — the six navigation commands, built from one `NavigationCommand`
+  table. Each entry reduces to a list of candidate notes, so the three outcomes are
+  handled once: none → `Notice`, one → open, several → a `FuzzySuggestModal` picker.
+  Commands use `checkCallback` so they hide themselves (and their hotkeys go inert) with
+  no active markdown note; the graph is only built when a command actually runs.
 - **`settings.ts`** — `FolgezettelSettings` (`propertyName`, `maxSteps`), `DEFAULT_SETTINGS`
   (`folgezettel`, `5`), and the `FolgezettelSettingTab` (a text field for the property,
   a `1–10` slider for the per-direction note count).
 - **`main.ts`** — plugin entry: loads settings, registers the view type (passing itself
-  to the view), the ribbon icon, the command, and the settings tab. `saveSettings()`
+  to the view), the ribbon icon, the panel command, the navigation commands (via
+  `registerNavigationCommands`), and the settings tab. `saveSettings()`
   persists and then `refresh()`es every open pane so changes apply immediately.
 
 ### Key model decisions (read before changing traversal/rendering)
@@ -57,9 +70,8 @@ source files under `src/`, each a clear layer:
   work in **both** directions.
 - **Junctions are followed, not stopped.** When a note has 2+ neighbours in the walk
   direction, a `branch` entry is emitted and the strand continues along the chosen
-  option — the reader's pick (`branchSelections`) if any, else the option with the most
-  recent file **mtime** (`mostRecent`). A single neighbour is followed, zero ends the
-  strand. The per-direction note cap is `settings.maxSteps` (default 5, configurable
+  option — the reader's pick (`branchSelections`) if any, else the **first declared
+  link** (`selectedOption`). A single neighbour is followed, zero ends the strand. The per-direction note cap is `settings.maxSteps` (default 5, configurable
   1–10; branch entries count against it). The upward chain is reversed at render time so
   top-to-bottom reads with the sequence.
 - **Branch state is pane-local and per-note.** `expandedBranches` (which junction
@@ -97,6 +109,28 @@ source files under `src/`, each a clear layer:
   the editor. Crucially, `render()` sets `currentPath` in **every** branch — the empty
   state included (to `null`) — otherwise leaving to a non-note view (e.g. the graph) and
   back would keep `currentPath` stale and the pane stuck on the "open a note" message.
+
+- **"Current branch" = the *first* declared link, everywhere.** The first entry of a
+  note's Folgezettel property continues the strand; every later entry starts a new one.
+  `navigate.ts` follows `outgoing[...][0]` at every junction, and the panel's
+  `selectedOption` defaults to `options[0]` — so a jump command and the drawn strand
+  agree on where the current branch runs. The panel's only departure is the reader's own
+  `branchSelections`, which is transient, pane-local exploration and resets with the
+  note. Keep the two in step: changing the default on one side without the other
+  re-opens the split this rule exists to close.
+- **`findParent` is not `findPreviousJunction`.** The previous junction is the nearest
+  ancestor that forks at all. The *parent* is the nearest ancestor that forks **and**
+  whose fork this strand left by a non-first link — i.e. where the current branch was
+  actually started; junctions we merely continued straight through are skipped. When no
+  such ancestor exists, `findParent` falls back to the beginning of the structure (the
+  topmost note nothing links to), and returns `null` only when the note *is* that
+  beginning.
+- **Several notes linking to the same note is malformed data, handled defensively.**
+  A well-formed structure gives each note at most one predecessor. When the vault breaks
+  that, `incoming` order is just vault scan order, so there is no principled "the"
+  previous note: the upward walks take `incoming[0]` to stay deterministic, and `Open
+  previous note` shows the picker rather than silently guessing. This is a safeguard
+  against bad data, not a supported topology — don't build features on it.
 
 ### Obsidian integration points
 

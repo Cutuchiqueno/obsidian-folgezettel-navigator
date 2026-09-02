@@ -62,9 +62,10 @@ Where the thread forks — a note with more than one continuation, or more than 
 leading into it — the panel shows a **junction**: an entry with a *fork* icon in place
 of the plain dot.
 
-A junction can't display every strand at once, so it picks a sensible default: the
-branch whose note was **most recently modified**, and it continues the sequence along
-that one. To explore the alternatives:
+A junction can't display every strand at once, so it follows the **first** link in the
+note's `folgezettel` property — the branch that continues the thread (see
+[Which strand counts as "the current branch"](#which-strand-counts-as-the-current-branch)).
+To explore the alternatives:
 
 1. **Click the fork icon.** The entry expands into a card listing every option (your
    current choice first), styled like Obsidian's search-result previews.
@@ -74,7 +75,44 @@ that one. To explore the alternatives:
    your pick.
 
 Your branch choices are remembered while you stay on the note and reset when you move to
-a different one.
+a different one — at which point the panel is back to following first links.
+
+## Jumping without the panel
+
+Six commands move the editor along the sequence, so you can follow a thread with the
+keyboard whether or not the panel is open. Find them in the command palette under
+**Folgezettel Navigator**, or bind hotkeys to them under Settings → Hotkeys. Each opens
+the note **in the current tab**.
+
+| Command | Goes to |
+| --- | --- |
+| **Open previous note** | The note that leads into this one |
+| **Open following note** | The note this one continues into |
+| **Open parent note** | The note this branch was started from |
+| **Open leaf note** | The end of the current branch |
+| **Open next junction note** | The next fork further down the branch |
+| **Open previous junction note** | The nearest fork further up |
+
+When a jump has **several** candidates — a note with more than one continuation, or more
+than one note leading into it — a picker opens listing them in the order the property
+declares, and you choose. When there is nowhere to go, a notice says so.
+
+### Which strand counts as "the current branch"
+
+For these commands the **first** link in a note's `folgezettel` property continues the
+branch; every later link starts a new one. So *Open leaf note* runs down first links to
+the end of the thread, and *Open next junction note* finds the next fork along it.
+
+That is also what makes **parent** different from **previous junction**. Walking upward,
+*previous junction* stops at the nearest fork of any kind. *Parent* keeps going past
+forks the branch merely ran straight through, and stops at the one this branch actually
+**split off** from — a fork you left by a link that wasn't its first. If the thread never
+split off anything, *parent* takes you to the beginning of the structure: the note that
+nothing links to.
+
+The panel uses the same rule, so a jump and the drawn sequence agree on where the branch
+runs — unless you have picked a different option in a junction card, which steers the
+panel for as long as you stay on that note.
 
 ## Interactions at a glance
 
@@ -85,6 +123,7 @@ a different one.
 | **Click** a junction's fork icon | Expand / collapse its list of branches |
 | **Hover** a branch option *(desktop)* | Preview that strand below the card |
 | **Click** a branch option | Choose that strand (does **not** open the note) |
+| **Navigation command** (palette / hotkey) | Jumps the current tab along the sequence |
 
 On a junction entry the two targets do different things: clicking the **title** opens the
 note, while clicking the **fork icon** opens the branch list.

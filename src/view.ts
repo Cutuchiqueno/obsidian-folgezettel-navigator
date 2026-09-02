@@ -33,7 +33,7 @@ export class FolgezettelView extends ItemView {
 	private currentPath: string | null = null;
 	/** Junction keys whose option list is expanded. */
 	private expandedBranches = new Set<string>();
-	/** Junction key -> chosen option path (overrides the mtime default). */
+	/** Junction key -> chosen option path (overrides the first-link default). */
 	private branchSelections = new Map<string, string>();
 	/**
 	 * Transient hover preview: while the mouse is over an option in an expanded
@@ -166,8 +166,7 @@ export class FolgezettelView extends ItemView {
 
 			if (neighbours.length >= 2) {
 				const key = branchKey(direction, node);
-				const stored = this.branchSelections.get(key);
-				const selected = neighbours.find((f) => f.path === stored) ?? mostRecent(neighbours);
+				const selected = this.selectedOption(key, neighbours);
 				this.renderBranchEntry(parent, neighbours, key, selected, direction);
 				remaining--; // the branch entry occupies a slot
 
@@ -186,6 +185,18 @@ export class FolgezettelView extends ItemView {
 		}
 	}
 
+	/**
+	 * Which option a junction continues along: the reader's pick if they made one, else
+	 * the **first declared link**. That default is the same rule the navigation commands
+	 * in `navigate.ts` use — the first entry of a note's Folgezettel property continues
+	 * the branch, later entries start new ones — so the panel and the jump commands agree
+	 * on where the current branch runs.
+	 */
+	private selectedOption(key: string, options: TFile[]): TFile {
+		const stored = this.branchSelections.get(key);
+		return options.find((f) => f.path === stored) ?? options[0];
+	}
+
 	/** (Re)render a junction's continuation container from its current/previewed choice. */
 	private renderContinuation(key: string): void {
 		const info = this.branchContinuations.get(key);
@@ -195,9 +206,7 @@ export class FolgezettelView extends ItemView {
 		const { options, direction, visited, budget, container } = info;
 		const preview =
 			this.previewBranch?.key === key ? options.find((f) => f.path === this.previewBranch?.path) : undefined;
-		const stored = this.branchSelections.get(key);
-		const selected = options.find((f) => f.path === stored) ?? mostRecent(options);
-		const continueFrom = preview ?? selected;
+		const continueFrom = preview ?? this.selectedOption(key, options);
 		if (visited.has(continueFrom.path)) return;
 
 		const nextVisited = new Set(visited);
@@ -248,7 +257,9 @@ export class FolgezettelView extends ItemView {
 			return;
 		}
 
-		// The current choice leads the list; the rest keep their declared order.
+		// The current choice leads the list; the rest keep their declared order. Until the
+		// reader picks something else the choice *is* the first link, so an untouched card
+		// simply reads in the order the property declares.
 		const ordered = [selected, ...options.filter((f) => f.path !== selected.path)];
 		const optionList = row.createDiv({ cls: "folgezettel-branch-options" });
 		for (const file of ordered) {
@@ -327,9 +338,4 @@ export class FolgezettelView extends ItemView {
 
 function branchKey(direction: Direction, junction: TFile): string {
 	return `${direction}|${junction.path}`;
-}
-
-/** The option whose note was modified most recently — the default chosen strand. */
-function mostRecent(files: TFile[]): TFile {
-	return files.reduce((a, b) => (b.stat.mtime > a.stat.mtime ? b : a));
 }

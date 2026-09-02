@@ -17,6 +17,7 @@
 import { Plugin, WorkspaceLeaf } from "obsidian";
 import { FolgezettelView, VIEW_TYPE_FOLGEZETTEL } from "./view";
 import { DEFAULT_SETTINGS, FolgezettelSettings, FolgezettelSettingTab } from "./settings";
+import { registerNavigationCommands } from "./commands";
 
 export default class FolgezettelPlugin extends Plugin {
 	settings!: FolgezettelSettings;
@@ -33,6 +34,9 @@ export default class FolgezettelPlugin extends Plugin {
 			name: "Open panel",
 			callback: () => this.activateView(),
 		});
+
+		// Jump commands along the sequence; they work with or without the panel open.
+		registerNavigationCommands(this);
 
 		this.addSettingTab(new FolgezettelSettingTab(this.app, this));
 	}
