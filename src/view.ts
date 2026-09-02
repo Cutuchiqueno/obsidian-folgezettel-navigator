@@ -30,6 +30,12 @@ const MAX_ITERATIONS = 100;
  */
 type EntryKind = "incoming" | "outgoing" | "active";
 
+/** A fork on show: the branches it opens, and the key its expanded state is stored under. */
+interface BranchMenu {
+	key: string;
+	options: TFile[];
+}
+
 export class FolgezettelView extends ItemView {
 	/** Live hover popover slot required by Obsidian's page-preview integration. */
 	hoverPopover: HoverPopover | null = null;
@@ -179,10 +185,14 @@ export class FolgezettelView extends ItemView {
 	}
 
 	/**
-	 * Draw from `index` downward: the remaining ancestors, then the active note, then its
-	 * continuations. A note that is one of several branches takes a card, and everything
-	 * below it goes into that card's continuation container — so hovering one of its
-	 * options replaces the lot with that branch, and mouse-out puts the real strand back.
+	 * Draw from `index` downward, one row per step: the remaining ancestors, then the
+	 * active note, then its continuations.
+	 *
+	 * `menu` is set when the row just drawn **forks**. This row is then that fork's
+	 * branch-head slot, and shows the option list in place of its title while the fork's
+	 * circle is expanded. Everything after this row becomes that fork's continuation, so a
+	 * hover preview replaces the lot — the rest of the ancestors, the active note and its
+	 * continuations — while the menu the cursor sits in stays exactly where it is.
 	 */
 	private renderChain(
 		container: HTMLElement,
@@ -190,58 +200,57 @@ export class FolgezettelView extends ItemView {
 		index: number,
 		note: TFile,
 		visited: Set<string>,
-		budget: number
+		budget: number,
+		menu?: BranchMenu
 	): void {
-		if (index < 0) {
-			this.renderActive(container, note, visited, budget);
+		const isActive = index < 0;
+		const file = isActive ? note : ancestors[index];
+		const kind: EntryKind = isActive ? "active" : "incoming";
+
+		let marker: HTMLElement | null = null;
+		if (menu && this.expandedBranches.has(menu.key)) this.renderMenuRow(container, file, kind, menu);
+		else marker = this.renderEntry(container, file, kind);
+
+		// The circle belongs to the note that *has* the branches, so claim this row's
+		// gutter for its own fork; the row below is where that fork's menu will open. An
+		// open menu has no marker to claim, and nothing there to describe yet.
+		const options = this.forkOptions(file);
+		const own = options ? { key: branchKey(kind, file), options } : undefined;
+		if (own && marker) this.attachBranchToggle(marker, own);
+
+		if (!menu) {
+			this.continueChain(container, ancestors, index, note, visited, budget, own);
 			return;
 		}
 
-		const file = ancestors[index];
-		const options = this.siblingOptions(file);
-		if (!options) {
-			this.renderEntry(container, file, "incoming");
-			this.renderChain(container, ancestors, index - 1, note, visited, budget);
-			return;
-		}
-
-		const key = branchKey("incoming", file);
-		this.renderSiblingEntry(container, file, "incoming", options, key);
 		const below = container.createDiv({ cls: "folgezettel-continuation" });
-		this.branchContinuations.set(key, {
+		this.branchContinuations.set(menu.key, {
 			container: below,
-			options,
-			renderDefault: () => this.renderChain(below, ancestors, index - 1, note, visited, budget),
+			options: menu.options,
+			renderDefault: () => this.continueChain(below, ancestors, index, note, visited, budget, own),
 			renderPreview: (option) => this.renderBranchPreview(below, option, visited, budget),
 		});
-		this.renderContinuation(key);
+		this.renderContinuation(menu.key);
 	}
 
-	/** The active note, and below it the strand it continues into. */
-	private renderActive(container: HTMLElement, note: TFile, visited: Set<string>, budget: number): void {
-		const options = this.siblingOptions(note);
-		if (!options) {
-			this.renderEntry(container, note, "active");
-			this.renderStrand(container, note, new Set(visited), budget);
-			return;
-		}
-
-		const key = branchKey("active", note);
-		this.renderSiblingEntry(container, note, "active", options, key);
-		const below = container.createDiv({ cls: "folgezettel-continuation" });
-		this.branchContinuations.set(key, {
-			container: below,
-			options,
-			renderDefault: () => this.renderStrand(below, note, new Set(visited), budget),
-			renderPreview: (option) => this.renderBranchPreview(below, option, visited, budget),
-		});
-		this.renderContinuation(key);
+	/** Carry on past the row `renderChain` just drew: the next ancestor, or the strand. */
+	private continueChain(
+		container: HTMLElement,
+		ancestors: TFile[],
+		index: number,
+		note: TFile,
+		visited: Set<string>,
+		budget: number,
+		menu?: BranchMenu
+	): void {
+		if (index < 0) this.renderStrand(container, note, new Set(visited), budget, menu);
+		else this.renderChain(container, ancestors, index - 1, note, visited, budget, menu);
 	}
 
 	/**
-	 * What a hovered sibling would put below its card: the strand following that option,
+	 * What a hovered branch would put below the menu: the strand following that option,
 	 * standing in for the ancestors, the active note and its continuations — every one of
-	 * which belongs to the branch the reader is looking away from. Transient: the card's
+	 * which belongs to the branch the reader is looking away from. Transient: the fork's
 	 * `renderDefault` puts the real strand back on mouse-out.
 	 */
 	private renderBranchPreview(container: HTMLElement, option: TFile, visited: Set<string>, budget: number): void {
@@ -251,59 +260,68 @@ export class FolgezettelView extends ItemView {
 	}
 
 	/**
-	 * Walk and render the strand continuing from `from`, downward. At a junction it renders
-	 * the branch card, then a continuation container holding the strand beyond it, and
-	 * recurses into that container along the chosen (or hover-previewed) option. Where the
-	 * walk stops short, `renderEndOfBranch` adds the detached entry for the branch's end.
+	 * Walk and render the strand continuing from `from`, downward, one row per step. As in
+	 * `renderChain`, a row whose note forks takes the numbered circle and hands the next
+	 * row that fork's `menu`; that next row is the branch head, and everything after it is
+	 * the fork's continuation. Where the walk stops short, `renderEndOfBranch` adds the
+	 * detached entry for the branch's end.
 	 *
 	 * Downward only: the ancestors are drawn by `renderChain`, off `walkUp`. Nothing here
 	 * ever grows a strand *upward*, which is the property that lets the whole panel hang
 	 * from its top edge.
 	 */
-	private renderStrand(parent: HTMLElement, from: TFile, visited: Set<string>, budget: number): void {
+	private renderStrand(
+		parent: HTMLElement,
+		from: TFile,
+		visited: Set<string>,
+		budget: number,
+		menu?: BranchMenu
+	): void {
 		const edges = this.graph?.outgoing;
 		if (!edges) return;
 		let node = from;
 		let remaining = budget;
+		let pending = menu;
 
 		for (let i = 0; i < MAX_ITERATIONS && remaining > 0; i++) {
-			const neighbours = edges.get(node.path) ?? [];
-			if (neighbours.length === 0) break;
+			// At a fork the reader's pick decides which branch is drawn, else the first
+			// declared link; anywhere else there is only ever one way on.
+			const next = pending
+				? this.selectedOption(pending.key, pending.options)
+				: (edges.get(node.path) ?? [])[0];
+			if (!next || visited.has(next.path)) break;
+			visited.add(next.path);
 
-			if (neighbours.length >= 2) {
-				const key = branchKey("outgoing", node);
-				this.renderBranchEntry(parent, neighbours, key, this.selectedOption(key, neighbours), "outgoing");
-				remaining--; // the branch entry occupies a slot
+			let marker: HTMLElement | null = null;
+			if (pending && this.expandedBranches.has(pending.key)) this.renderMenuRow(parent, next, "outgoing", pending);
+			else marker = this.renderEntry(parent, next, "outgoing");
+			remaining--;
 
-				const container = parent.createDiv({ cls: "folgezettel-continuation" });
-				const beyond = remaining;
-				this.branchContinuations.set(key, {
-					container,
-					options: neighbours,
-					renderDefault: () => this.continueBeyond(container, this.selectedOption(key, neighbours), visited, beyond),
-					renderPreview: (option) => this.continueBeyond(container, option, visited, beyond),
+			// This row's own fork — but only while the row that would carry its menu is
+			// still inside the step cap, so a circle never opens onto nothing, and only
+			// while this row has a marker to put it on.
+			const options = remaining > 0 ? this.forkOptions(next) : null;
+			const own = options ? { key: branchKey("outgoing", next), options } : undefined;
+			if (own && marker) this.attachBranchToggle(marker, own);
+
+			if (pending) {
+				const below = parent.createDiv({ cls: "folgezettel-continuation" });
+				const rest = remaining;
+				this.branchContinuations.set(pending.key, {
+					container: below,
+					options: pending.options,
+					renderDefault: () => this.renderStrand(below, next, new Set(visited), rest, own),
+					renderPreview: (option) => this.renderBranchPreview(below, option, visited, rest),
 				});
-				this.renderContinuation(key);
-				return; // the recursion owns the strand beyond the card — its end included
+				this.renderContinuation(pending.key);
+				return; // the recursion owns the strand beyond this row — its end included
 			}
 
-			const next = neighbours[0];
-			if (visited.has(next.path)) break;
-			visited.add(next.path);
-			this.renderEntry(parent, next, "outgoing");
-			remaining--;
 			node = next;
+			pending = own;
 		}
 
 		this.renderEndOfBranch(parent, node, visited);
-	}
-
-	/** The strand past a junction card, from the option that card currently stands for. */
-	private continueBeyond(container: HTMLElement, option: TFile, visited: Set<string>, budget: number): void {
-		if (visited.has(option.path)) return;
-		const seen = new Set(visited);
-		seen.add(option.path);
-		this.renderStrand(container, option, seen, budget);
 	}
 
 	/**
@@ -371,84 +389,92 @@ export class FolgezettelView extends ItemView {
 	}
 
 	/**
-	 * The branches `file` is one of: its parent's continuations, when the parent forks.
-	 * Null when the parent has just this one continuation, or there is no parent — the
-	 * entry is then an ordinary note in the strand.
+	 * The branches `file` opens: its Folgezettel links, when it declares more than one.
+	 * Null otherwise — the note simply continues, or ends.
 	 *
-	 * Which note counts as the parent is the deterministic `incoming[0]`, the same pick
-	 * the upward walks in `navigate.ts` make when a vault gives a note two predecessors.
+	 * "Here it branches" is a property of the note that *has* the links, so this is what
+	 * decides where the numbered circle goes. Do not read it off `incoming[…]` instead: a
+	 * note that merely *starts* one of the branches has nothing to fork, and hanging the
+	 * icon there put it one row below the fact it describes.
 	 */
-	private siblingOptions(file: TFile): TFile[] | null {
-		if (!this.graph) return null;
-		const parent = this.graph.incoming.get(file.path)?.[0];
-		if (!parent) return null;
-		const options = this.graph.outgoing.get(parent.path) ?? [];
+	private forkOptions(file: TFile): TFile[] | null {
+		const options = this.graph?.outgoing.get(file.path) ?? [];
 		return options.length >= 2 ? options : null;
 	}
 
 	/**
-	 * An entry that is one of several branches at a fork, drawn with the same numbered
-	 * circle as a junction — because it *is* one: entering a branch must not cost the
-	 * reader the fork it came from. Used going up and on the active note; going down the
-	 * junction is drawn by `renderBranchEntry` instead.
-	 *
-	 * Hovering an option previews that branch in place of **everything below the card** —
-	 * the rest of the ancestors, the active note and its continuations all belong to the
-	 * branch being looked away from, so all of them stand down for the duration. Picking
-	 * an option **opens** it, where an outgoing junction's re-roots the strand: from here
-	 * the drawn path is the one that leads to the note you are on, so going to the sibling
-	 * is the only way to actually switch to it.
+	 * Turn a drawn entry's gutter dot into the junction's numbered circle and wire it to
+	 * open the fork's menu. The circle marks the note the branches hang off; the menu it
+	 * opens appears one row down, on the branch head, where those branches begin.
 	 */
-	private renderSiblingEntry(
-		parent: HTMLElement,
-		file: TFile,
-		kind: EntryKind,
-		options: TFile[],
-		key: string
-	): void {
-		const expanded = this.expandedBranches.has(key);
+	private attachBranchToggle(marker: HTMLElement, menu: BranchMenu): void {
+		marker.empty();
+		marker.parentElement?.addClass("is-branch");
 
-		const row = parent.createDiv({ cls: `folgezettel-entry is-branch is-${kind}${expanded ? " is-expanded" : ""}` });
-		const marker = row.createDiv({ cls: "folgezettel-marker" });
 		const toggle = marker.createDiv({
 			cls: "folgezettel-branch-toggle",
-			text: String(options.length),
-			attr: { "aria-label": `Show ${options.length} branches` },
+			text: String(menu.options.length),
+			attr: { "aria-label": `Show ${menu.options.length} branches` },
 		});
 		toggle.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
 			this.previewBranch = null;
-			if (this.expandedBranches.has(key)) this.expandedBranches.delete(key);
-			else this.expandedBranches.add(key);
+			if (this.expandedBranches.has(menu.key)) this.expandedBranches.delete(menu.key);
+			else this.expandedBranches.add(menu.key);
 			this.render();
 		});
+	}
 
-		if (!expanded) {
-			this.renderTitleLink(row, file);
-			return;
-		}
+	/**
+	 * The branch-head row, with the fork's option list in place of its title. The row keeps
+	 * its own gutter marker: it is still that note's slot in the strand, and the circle for
+	 * the fork these options belong to sits on the row above, where the links are.
+	 *
+	 * What a pick does depends on which slot this is. Below the active note (`outgoing`) it
+	 * re-roots the drawn strand and never opens. Above it, and on the active row, it
+	 * **opens** the note: the drawn path there is the one that leads to the note you are
+	 * on, so going to the branch is the only way to switch to it.
+	 */
+	private renderMenuRow(parent: HTMLElement, file: TFile, kind: EntryKind, menu: BranchMenu): void {
+		const row = parent.createDiv({ cls: `folgezettel-entry is-${kind} is-expanded` });
+		// No gutter icon while the menu is open: the row stands for a choice, not yet for a
+		// note, so a dot or a circle here would describe whichever branch happens to lead.
+		// The marker element stays for the rail and the gutter width, and closing the menu
+		// redraws whatever icon the note then chosen calls for.
+		row.createDiv({ cls: "folgezettel-marker" });
 
-		// This note leads the list, as the chosen option does on an outgoing junction.
-		const ordered = [file, ...options.filter((f) => f.path !== file.path)];
+		// This note leads the list; the rest keep their declared order. Until the reader
+		// picks something else it *is* the first link, so an untouched menu simply reads in
+		// the order the property declares.
+		const ordered = [file, ...menu.options.filter((f) => f.path !== file.path)];
 		const optionList = row.createDiv({ cls: "folgezettel-branch-options" });
 		for (const option of ordered) {
-			const el = optionList.createDiv({ cls: "folgezettel-branch-option", text: option.basename });
+			const el = optionList.createDiv({
+				cls: `folgezettel-branch-option${option.path === file.path ? " is-current" : ""}`,
+				text: option.basename,
+			});
 			el.addEventListener("click", (event: MouseEvent) => {
 				this.previewBranch = null;
-				this.expandedBranches.delete(key);
-				void this.app.workspace.getLeaf(event.ctrlKey || event.metaKey).openFile(option);
+				this.expandedBranches.delete(menu.key);
+				if (kind === "outgoing") this.branchSelections.set(menu.key, option.path);
+				else void this.app.workspace.getLeaf(event.ctrlKey || event.metaKey).openFile(option);
+				this.render();
 			});
-			// Hovering a *sibling* previews it; hovering this entry's own note restores the
-			// real strand, since that is what is drawn below anyway. Touch has no hover (and
-			// no mouseleave to clear a stuck preview), so mobile relies on tap-to-open above.
+			// Hovering an option previews its branch below this row. The panel hangs from
+			// its top edge, so rebuilding what is below never moves the menu under the
+			// cursor. Hovering this row's own note restores the real strand, since that is
+			// what is drawn below anyway. Touch has no hover (and no mouseleave to clear a
+			// stuck preview), so mobile relies on tap — the click handler above.
 			if (!Platform.isMobile) {
 				el.addEventListener("mouseenter", () =>
-					option.path === file.path ? this.clearPreviewBranch(key) : this.setPreviewBranch(key, option.path)
+					option.path === file.path
+						? this.clearPreviewBranch(menu.key)
+						: this.setPreviewBranch(menu.key, option.path)
 				);
 			}
 		}
 		if (!Platform.isMobile) {
-			optionList.addEventListener("mouseleave", () => this.clearPreviewBranch(key));
+			optionList.addEventListener("mouseleave", () => this.clearPreviewBranch(menu.key));
 		}
 	}
 
@@ -466,7 +492,8 @@ export class FolgezettelView extends ItemView {
 		else info.renderDefault();
 	}
 
-	private renderEntry(parent: HTMLElement, file: TFile, kind: EntryKind, detached = false): void {
+	/** A note in the strand. Returns its gutter marker, so a fork can claim the icon. */
+	private renderEntry(parent: HTMLElement, file: TFile, kind: EntryKind, detached = false): HTMLElement {
 		// A note nothing continues ends the thread; its dot is drawn hollow (see Styling),
 		// so a real ending reads differently from a strand the step cap merely cut short.
 		const leaf = (this.graph?.outgoing.get(file.path)?.length ?? 0) === 0;
@@ -476,73 +503,13 @@ export class FolgezettelView extends ItemView {
 
 		// Left gutter: the indentation guide rail and a dot marking the note — accent for
 		// the active note, muted for the rest, hollow when the note is a leaf (colour is
-		// set in CSS).
+		// set in CSS). A note that forks trades that dot for the branch circle; see
+		// `attachBranchToggle`.
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
 		marker.createDiv({ cls: "folgezettel-dot" });
 
 		this.renderTitleLink(row, file);
-	}
-
-	/**
-	 * A junction, rendered inline. Collapsed it is a normal entry for the chosen
-	 * option (title opens the note); its gutter shows a filled circle carrying the
-	 * number of selectable branches instead of the plain dot. Clicking that circle
-	 * expands the entry into the full option list; picking an option collapses it
-	 * and re-roots the strand.
-	 */
-	private renderBranchEntry(
-		parent: HTMLElement,
-		options: TFile[],
-		key: string,
-		selected: TFile,
-		kind: EntryKind
-	): void {
-		const expanded = this.expandedBranches.has(key);
-
-		const row = parent.createDiv({ cls: `folgezettel-entry is-branch is-${kind}${expanded ? " is-expanded" : ""}` });
-		const marker = row.createDiv({ cls: "folgezettel-marker" });
-		const toggle = marker.createDiv({
-			cls: "folgezettel-branch-toggle",
-			text: String(options.length),
-			attr: { "aria-label": `Show ${options.length} branches` },
-		});
-		toggle.addEventListener("click", (event: MouseEvent) => {
-			event.preventDefault();
-			this.previewBranch = null;
-			if (this.expandedBranches.has(key)) this.expandedBranches.delete(key);
-			else this.expandedBranches.add(key);
-			this.render();
-		});
-
-		if (!expanded) {
-			this.renderTitleLink(row, selected);
-			return;
-		}
-
-		// The current choice leads the list; the rest keep their declared order. Until the
-		// reader picks something else the choice *is* the first link, so an untouched card
-		// simply reads in the order the property declares.
-		const ordered = [selected, ...options.filter((f) => f.path !== selected.path)];
-		const optionList = row.createDiv({ cls: "folgezettel-branch-options" });
-		for (const file of ordered) {
-			const option = optionList.createDiv({ cls: "folgezettel-branch-option", text: file.basename });
-			option.addEventListener("click", () => {
-				this.previewBranch = null;
-				this.branchSelections.set(key, file.path);
-				this.expandedBranches.delete(key);
-				this.render();
-			});
-			// Hovering an option previews its continuation. The panel hangs from its top
-			// edge, so rebuilding what is below never moves the card under the cursor.
-			// Touch has no hover (and no mouseleave to clear a stuck preview), so on
-			// mobile we skip it and rely on tap-to-select — the click handler above.
-			if (!Platform.isMobile) {
-				option.addEventListener("mouseenter", () => this.setPreviewBranch(key, file.path));
-			}
-		}
-		if (!Platform.isMobile) {
-			optionList.addEventListener("mouseleave", () => this.clearPreviewBranch(key));
-		}
+		return marker;
 	}
 
 	private setPreviewBranch(key: string, path: string): void {

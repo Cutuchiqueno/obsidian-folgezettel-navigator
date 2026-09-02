@@ -91,11 +91,12 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   ancestors are collected once by `walkUp` before anything is drawn, and every preview
   runs downward through `renderStrand`. Reintroduce an upward-growing preview and the
   anchoring breaks with it.
-- **Junctions are followed, not stopped.** When a note has 2+ neighbours in the walk
-  direction, a `branch` entry is emitted and the strand continues along the chosen
-  option — the reader's pick (`branchSelections`) if any, else the **first declared
-  link** (`selectedOption`). A single neighbour is followed, zero ends the strand. The per-direction note cap is `settings.maxSteps` (default 5, configurable
-  1–10; branch entries count against it). The upward chain is reversed at render time so
+- **Junctions are followed, not stopped.** A note with 2+ links takes the numbered circle
+  and the strand continues along the chosen option — the reader's pick
+  (`branchSelections`) if any, else the **first declared link** (`selectedOption`). A
+  single link is followed, zero ends the strand. The per-direction note cap is
+  `settings.maxSteps` (default 5, configurable 1–10; the branch head counts against it
+  like any row). The upward chain is collected by `walkUp` and drawn farthest-first, so
   top-to-bottom reads with the sequence.
 - **Each strand ends in a detached far-end entry.** Where the per-direction cap cuts a
   walk short, `renderFarEnd` appends one extra entry past the end: upward the note the
@@ -108,9 +109,7 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   and, when it does not, the open circle a leaf gets at that same size (the beginning of
   the structure, the thread's other end) — visual only, with no expand handler, because
   everything between it and the active note is fixed and so there is nothing to choose.
-  Downward it keeps the ordinary dot, hollow because a leaf always is. A sibling circle
-  does *not* count as "the farthest entry is a junction card" for the rule below — that
-  keys on a junction the **walk** produced, which is the one that ends the walk. Three
+  Downward it keeps the ordinary dot, hollow because a leaf always is. Three
   cases draw nothing: the note is already on screen (the `visited` guard; downward,
   `findLeaf` returns `null` exactly when the farthest entry *is* the leaf), there is no
   such note (the active note is itself the beginning), or — upward only — the farthest
@@ -125,30 +124,40 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   change) but survive metadata refreshes.
   Junction key = `` `${kind}|${junction.path}` ``, where `kind` is the entry's slot
   (`incoming` / `outgoing` / `active`) — see `branchKey`.
-- **Junction-ness belongs to the note, not to the walk direction.** A note is one of
-  several branches when its **parent forks** — `siblingOptions(file)` asks
-  `outgoing[incoming[file][0]]` — and it carries the numbered circle wherever it is drawn:
-  below the active note, above it, or *as* the active note. Do not go back to reading it
-  off `edges = graph[direction]`: upward that counts a note's **predecessors**, which is a
-  different question, and answering it there is what used to make a note lose its circle
-  the moment the reader entered its branch (the fork was then unreachable from every note
-  along it). The circle always sits on the *branch*, never on the forking note — that is
-  the entry the reader is standing on and can switch away from.
-- **Every card hovers; upward a pick opens, downward it re-roots.** Both kinds of card
-  preview on hover through the same `previewBranch` / `renderContinuation` path. What
-  differs is how much they replace: an outgoing junction's continuation holds the strand
-  beyond it, while a sibling card's holds **everything below** — the remaining ancestors,
-  the active note and its continuations, all of which belong to the branch being looked
-  away from. Clicking differs for the same reason: `renderBranchEntry` (downward) re-roots
-  the drawn strand and never opens, while `renderSiblingEntry` (upward and on the active
-  row) opens the note. From above, the drawn path is the one that leads to the note you
-  are on, so going to the sibling is the only way to actually switch to it.
-- **A junction renders inline as a normal entry when collapsed.** It shows the chosen
-  option's title (click opens the note) with a filled circle in the gutter carrying the
-  number of options; clicking that circle expands the entry into the full option list
-  (a card — see Styling), the **chosen option first, not emphasised**, and picking one
-  collapses it and re-roots the strand (it does **not** open the note). So a title click
-  and a gutter-icon click on the same entry do different things.
+- **The circle goes on the note that has the links; the menu opens one row down.**
+  "Here it branches" is a fact about the note with 2+ entries in its Folgezettel property,
+  so `forkOptions(file)` reads `outgoing[file]` and `attachBranchToggle` trades that row's
+  dot for the numbered circle — wherever the row sits: above the active note, below it, or
+  *as* the active note. The option list it opens belongs one row **down**, on the branch
+  head, because that is where those branches begin; `renderMenuRow` puts it in place of
+  that row's title and the row keeps its own marker. So the two are always adjacent, and a
+  note never loses the circle by being entered.
+
+  Two earlier readings are wrong and both cost the reader the fork. `edges[direction]`
+  counts a note's **predecessors** when walking up — a different question entirely.
+  `outgoing[incoming[file][0]]` asks whether the note *starts* a branch, which is true but
+  hangs the icon one row below the fact it describes.
+
+  The circle is attached only when the branch-head row is actually drawn (`renderStrand`
+  checks `remaining > 0` first), so it never opens onto nothing. Upward that always holds:
+  every ancestor's head is the next row down.
+- **Every fork hovers; upward a pick opens, downward it re-roots.** One path for both:
+  `previewBranch` → `renderContinuation`, and one row type, `renderMenuRow`. What differs
+  is how much the continuation holds. Downward it is the strand beyond the head; upward it
+  is **everything below** — the remaining ancestors, the active note and its continuations,
+  all of which belong to the branch being looked away from. Clicking differs for the same
+  reason: a pick in an `outgoing` menu re-roots the drawn strand and never opens, while one
+  in an `incoming` or `active` menu opens the note. From above, the drawn path is the one
+  that leads to the note you are on, so going to the branch is the only way to switch to
+  it. The menu row's own `kind` decides which, so the fork at the active note (menu below,
+  `outgoing`) re-roots while the fork above it (menu on the active row) opens.
+- **A fork reads as a normal row until its circle is clicked.** Collapsed, both rows are
+  ordinary entries: the forking note's title (click opens it) with the circle in its
+  gutter, and below it the branch head's title. Clicking the circle turns the row below
+  into the option list — the **current branch first**, carrying the hover background until
+  the cursor takes it — and drops that row's own gutter icon for as long as the menu is
+  open. Picking an option collapses it. So a title click and a gutter-icon click on the
+  same row do different things, and the icon acts on the row beneath.
 - **Hover preview is a partial rebuild — never route it through `render()`.** Hovering
   an option in an expanded card (either direction) sets `previewBranch` and reroutes
   that junction's continuation to the hovered option via `renderContinuation(key)`,
@@ -237,9 +246,14 @@ note. A **leaf** — a note nothing continues — keeps that size and colour but
 hollow: `background-color: transparent` plus an inset `box-shadow` ring of
 `--fz-ring-width`, which leaves the shape exactly `--fz-icon-size` across so the rail gaps
 still line up (a border would grow the box). It applies to the active note too, and marks
-a thread that really ends apart from one `maxSteps` merely cut short. A junction or
-sibling entry has no dot at all, so its numbered circle keeps the slot even when the
-option it names is a leaf. The gutter icon sits at the entry's **vertical centre**
+a thread that really ends apart from one `maxSteps` merely cut short. A forking row has no
+dot at all — `attachBranchToggle` empties the marker before adding the circle — so the
+count keeps the slot. A row **carrying an open menu has no icon at all**: it stands for a
+choice, not yet for a note, so a dot or a circle there would describe whichever branch
+happens to lead; `renderMenuRow` leaves the marker empty and closing the menu redraws
+whatever the note then chosen calls for. Its rail runs straight through instead of stopping
+short — `.folgezettel-entry.is-expanded .folgezettel-marker` zeroes `--fz-icon-size` and
+`--fz-rail-gap`, which closes the two segments into one line past the card. The gutter icon sits at the entry's **vertical centre**
 (`top: 50%`); the marker is
 `align-items: stretch`, so it spans the entry's full height and the icon stays centred
 however many lines the title wraps to (the title's small left padding sets the
@@ -261,6 +275,14 @@ Obsidian's search-result preview (`.search-result-file-matches` — `--search-re
 a `box-shadow` border ring, options divided by `border-bottom`). An expanded card takes a
 small margin on both sides, so its filled background never butts against a neighbouring
 filled row — the active one above or below it, or another expanded card.
+
+The branch currently taken (`.is-current`, always the first option) wears the hover
+background before the cursor is anywhere in the list, so the menu opens already showing
+where the strand runs. It is written as `.folgezettel-branch-options:not(:hover)` rather
+than a rule that clears the highlight when the list is hovered: hovering the current option
+would then have to out-specify its own clearing rule. With `:not(:hover)` the two rules
+never overlap — inside the list only `.folgezettel-branch-option:hover` applies, and the
+background simply follows the cursor.
 
 The far-end entries (`.folgezettel-entry.is-detached`) are set apart by
 a margin on the side facing the strand — `margin-bottom` on the one at the top,

@@ -243,11 +243,28 @@
 	background-color: var(--background-modifier-hover);
 }
 
-/* An expanded card is a filled block in a column of rows; a little air on both sides
-   keeps it from butting against a neighbouring filled row — the active one above or
-   below it, or another expanded card. */
-.folgezettel-entry.is-branch.is-expanded {
+/* Before the cursor is anywhere in the list, the branch currently taken already wears the
+   hover background, so the menu opens showing where the strand runs. `:not(:hover)` on the
+   list hands that highlight over rather than fighting it: once the pointer is inside, only
+   the rule above applies and the background simply follows the cursor. */
+.folgezettel-branch-options:not(:hover) .folgezettel-branch-option.is-current {
+	background-color: var(--background-modifier-hover);
+}
+
+/* The open menu is a filled block in a column of rows; a little air on both sides keeps
+   it from butting against a neighbouring filled row — the active one above or below it,
+   or another open menu. It carries `is-expanded` alone, not `is-branch`: the branch
+   circle sits one row up, on the note the options belong to. */
+.folgezettel-entry.is-expanded {
 	margin: var(--size-2-2) 0;
+}
+
+/* A menu row has no gutter icon, so there is nothing for the rail to stop short of:
+   zeroing the icon and the gap closes the two segments into one line running past the
+   card. (Not on the active row — the pivot draws no rail at all.) */
+.folgezettel-entry.is-expanded .folgezettel-marker {
+	--fz-icon-size: 0px;
+	--fz-rail-gap: 0px;
 }
 
 /* The detached far-end entries: the note the branch was started from, at the very top,

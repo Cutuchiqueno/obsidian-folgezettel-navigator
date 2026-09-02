@@ -73,26 +73,28 @@ entry is left out when it is already on screen.
 
 ## Junctions (branches)
 
-Where the thread forks — a note with more than one continuation — the panel shows a
-**junction**: an entry whose plain dot is replaced by a filled circle carrying the number
-of branches you can pick from.
+Where the thread forks — a note with more than one continuation — that note's plain dot is
+replaced by a filled circle carrying the number of branches. The circle sits on the note
+whose Folgezettel property holds the links, because that is where the thread actually
+divides; the branches themselves are listed one row below, where they begin.
 
 A junction can't display every strand at once, so it follows the **first** link in the
 note's `folgezettel` property — the branch that continues the thread (see
 [Which strand counts as "the current branch"](#which-strand-counts-as-the-current-branch)).
 To explore the alternatives:
 
-1. **Click the numbered circle.** The entry expands into a card listing every option (your
-   current choice first), styled like Obsidian's search-result previews.
+1. **Click the numbered circle.** The row *below* it — the one that starts the current
+   branch — turns into a card listing every option, your current choice first and already
+   highlighted, styled like Obsidian's search-result previews. That row drops its dot while
+   the card is open, since it now stands for a choice rather than for one note.
 2. **Hover an option** *(desktop)* to preview where that strand leads — the sequence
    beyond the junction updates live, without committing to it.
 3. **Click an option** to choose it. The card collapses and the sequence re-roots along
    your pick.
 
-A note that is one of several branches keeps its numbered circle wherever it appears —
-below the active note, above it, or when it *is* the active note. Entering a branch never
-costs you the fork you came from: expand the circle on the note you are on, or on any note
-above you, to see its branches and jump to one.
+A forking note keeps its circle wherever it appears — below the active note, above it, or
+when it *is* the active note. Entering a branch never costs you the fork you came from:
+expand the circle on any note above you to see its branches and jump to one.
 
 Hovering an option previews that branch wherever the card sits. Above the active note
 the preview stands in for everything below the card — the rest of the sequence, your
