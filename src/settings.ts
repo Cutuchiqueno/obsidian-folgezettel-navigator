@@ -15,6 +15,7 @@
  */
 
 import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFolder } from "obsidian";
+import type { SettingDefinitionItem } from "obsidian";
 import type FolgezettelPlugin from "./main";
 import { FOLGEZETTEL_KEY } from "./graph";
 
@@ -36,6 +37,31 @@ export const DEFAULT_SETTINGS: FolgezettelSettings = {
 	newNoteFolder: "",
 };
 
+/**
+ * Name and description of each setting, in one place: the declarative definitions and
+ * the `display()` fallback below both render them, and a wording change should not have
+ * to be made twice.
+ */
+const LABELS: Record<keyof FolgezettelSettings, { name: string; desc: string }> = {
+	propertyName: {
+		name: "Folgezettel property",
+		desc: "Frontmatter property that holds the Folgezettel link(s).",
+	},
+	newNoteFolder: {
+		name: "New note location",
+		desc:
+			"Folder that new Folgezettel notes are created in. Leave empty to create them " +
+			"next to the note they continue.",
+	},
+	maxSteps: {
+		name: "Sequence length",
+		desc: "How many incoming and outgoing notes to show on each side of the active note.",
+	},
+};
+
+const NEW_NOTE_FOLDER_PLACEHOLDER = "Same folder as the current note";
+const MAX_STEPS_RANGE = { min: 1, max: 10, step: 1 };
+
 export class FolgezettelSettingTab extends PluginSettingTab {
 	private plugin: FolgezettelPlugin;
 
@@ -44,13 +70,88 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * The settings, declared rather than built (Obsidian 1.13+). Declaring them is what
+	 * puts them in Obsidian's settings **search**; a tab that only renders itself in
+	 * `display()` cannot be found there. It also gets the folder field its type-ahead
+	 * from Obsidian itself, instead of the `FolderSuggest` below.
+	 *
+	 * Typed by `keyof FolgezettelSettings`, so a `key` that is not a real setting fails
+	 * the build rather than silently reading and writing nothing.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem<keyof FolgezettelSettings>[] {
+		return [
+			{
+				...LABELS.propertyName,
+				control: {
+					type: "text",
+					key: "propertyName",
+					placeholder: FOLGEZETTEL_KEY,
+					defaultValue: DEFAULT_SETTINGS.propertyName,
+				},
+			},
+			{
+				...LABELS.newNoteFolder,
+				control: {
+					type: "folder",
+					key: "newNoteFolder",
+					placeholder: NEW_NOTE_FOLDER_PLACEHOLDER,
+					defaultValue: DEFAULT_SETTINGS.newNoteFolder,
+					// The vault root is a legitimate answer here — `authoring.ts` maps the
+					// "/" it yields onto the root.
+					includeRoot: true,
+				},
+			},
+			{
+				...LABELS.maxSteps,
+				control: {
+					type: "slider",
+					key: "maxSteps",
+					...MAX_STEPS_RANGE,
+					defaultValue: DEFAULT_SETTINGS.maxSteps,
+				},
+			},
+		];
+	}
+
+	/**
+	 * Persist what a declarative control changed. Overridden for two reasons: the
+	 * inherited version only writes the data file, while `saveSettings()` also re-renders
+	 * every open panel so a change shows immediately; and the two text fields need the
+	 * same normalizing the fallback below gives them.
+	 */
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		const { settings } = this.plugin;
+		switch (key as keyof FolgezettelSettings) {
+			case "propertyName":
+				// Fall back to the default when the field is cleared.
+				settings.propertyName = text(value).trim() || FOLGEZETTEL_KEY;
+				break;
+			case "newNoteFolder":
+				settings.newNoteFolder = text(value).trim();
+				break;
+			case "maxSteps":
+				settings.maxSteps = Number(value);
+				break;
+			default:
+				return;
+		}
+		await this.plugin.saveSettings();
+	}
+
+	/**
+	 * Imperative fallback for Obsidian before 1.13, which has no declarative settings.
+	 * Obsidian ignores this whenever `getSettingDefinitions()` returns anything, so the
+	 * two never both run — keep them saying the same thing, or drop this (and
+	 * `FolderSuggest`) once `manifest.json` requires 1.13.
+	 */
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("Folgezettel property")
-			.setDesc("Frontmatter property that holds the Folgezettel link(s).")
+			.setName(LABELS.propertyName.name)
+			.setDesc(LABELS.propertyName.desc)
 			.addText((text) =>
 				text
 					.setPlaceholder(FOLGEZETTEL_KEY)
@@ -63,14 +164,11 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("New note location")
-			.setDesc(
-				"Folder that new Folgezettel notes are created in. Leave empty to create them " +
-					"next to the note they continue."
-			)
+			.setName(LABELS.newNoteFolder.name)
+			.setDesc(LABELS.newNoteFolder.desc)
 			.addSearch((search) => {
 				search
-					.setPlaceholder("Same folder as the current note")
+					.setPlaceholder(NEW_NOTE_FOLDER_PLACEHOLDER)
 					.setValue(this.plugin.settings.newNoteFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.newNoteFolder = value.trim();
@@ -81,11 +179,11 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Sequence length")
-			.setDesc("How many incoming and outgoing notes to show on each side of the active note.")
+			.setName(LABELS.maxSteps.name)
+			.setDesc(LABELS.maxSteps.desc)
 			.addSlider((slider) =>
 				slider
-					.setLimits(1, 10, 1)
+					.setLimits(MAX_STEPS_RANGE.min, MAX_STEPS_RANGE.max, MAX_STEPS_RANGE.step)
 					.setValue(this.plugin.settings.maxSteps)
 					.onChange(async (value) => {
 						this.plugin.settings.maxSteps = value;
@@ -95,7 +193,12 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 	}
 }
 
-/** Folder type-ahead for a path text field. */
+/** What a control handed us, as text. */
+function text(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
+/** Folder type-ahead for a path text field, for the pre-1.13 `display()` fallback. */
 class FolderSuggest extends AbstractInputSuggest<TFolder> {
 	constructor(app: App, private input: HTMLInputElement) {
 		super(app, input);

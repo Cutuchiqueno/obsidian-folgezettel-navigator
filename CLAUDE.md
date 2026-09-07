@@ -64,12 +64,22 @@ each a clear layer:
   notice that also took the typed text with it.
 - **`settings.ts`** — `FolgezettelSettings` (`propertyName`, `maxSteps`,
   `newNoteFolder`), `DEFAULT_SETTINGS` (`folgezettel`, `5`, `""`), and the
-  `FolgezettelSettingTab` (a text field for the property, a `1–10` slider for the
-  per-direction note count, a search field with folder type-ahead for the new-note
-  folder). The type-ahead is `FolderSuggest`, an `AbstractInputSuggest<TFolder>` over
-  `vault.getAllFolders(true)`; picking an option has to `trigger("input")` by hand,
-  because `setValue` alone does not fire the event the component's `onChange` listens
-  for.
+  `FolgezettelSettingTab`: a text field for the property, a folder field with
+  type-ahead for the new-note folder, a `1–10` slider for the per-direction note count.
+  The tab is written **twice over**, and deliberately:
+  `getSettingDefinitions()` declares the three settings (Obsidian 1.13+), which is what
+  puts them in Obsidian's settings **search** — a tab that only draws itself in
+  `display()` cannot be found there — and gets the folder field its type-ahead from
+  Obsidian; `display()` stays as the imperative fallback for the older versions
+  `manifest.json` still admits, and with it `FolderSuggest`, an
+  `AbstractInputSuggest<TFolder>` over `vault.getAllFolders(true)` (picking an option
+  there has to `trigger("input")` by hand, because `setValue` alone does not fire the
+  event the component's `onChange` listens for). Obsidian skips `display()` whenever
+  `getSettingDefinitions()` returns anything, so the two never both run — keep them
+  saying the same thing (`LABELS` holds the wording for both), and drop the fallback
+  when `minAppVersion` reaches 1.13. `setControlValue` is overridden because the
+  inherited one only writes the data file: it normalizes the two text fields and then
+  goes through `saveSettings()`, so a change re-renders the open panels.
 - **`main.ts`** — plugin entry: loads settings, registers the view type (passing itself
   to the view), the ribbon icon, the panel command, the navigation commands (via
   `registerNavigationCommands`), the authoring commands (via

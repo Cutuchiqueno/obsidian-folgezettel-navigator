@@ -22,6 +22,10 @@ dialog. A name that is empty, illegal, or already taken keeps the dialog open wi
 reason under the field, instead of throwing away what you typed. *Link following note*
 offers every note except the one you are on and the ones it already links to.
 
+**The settings are searchable.** All three are declared to Obsidian (1.13 and later), so
+they turn up in the search at the top of the settings window instead of only on the
+plugin's own tab. On older versions the tab renders as before.
+
 **New note location setting.** Which folder *Create following note* creates notes in,
 with folder autocompletion as Obsidian's own path settings have. Left empty — the
 default — each note is created next to the note it continues. A folder that does not
