@@ -14,7 +14,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { App, CachedMetadata, TFile } from "obsidian";
+import { App, TFile } from "obsidian";
 
 /** Default frontmatter property that holds the outgoing Folgezettel link(s). */
 export const FOLGEZETTEL_KEY = "folgezettel";
@@ -47,8 +47,14 @@ function toLinkpath(raw: unknown): string | null {
 	return text.length > 0 ? text : null;
 }
 
-/** Resolve every Folgezettel target declared in a note's frontmatter. */
-function resolveTargets(app: App, file: TFile, cache: CachedMetadata | null, propertyName: string): TFile[] {
+/**
+ * Resolve every Folgezettel target declared in a note's frontmatter, in declared order
+ * (the first entry continues the current branch, every later one starts a new one).
+ * This is `outgoing[file]` for a single note — the graph is built out of it, and the
+ * authoring commands use it to see what a note already links to.
+ */
+export function folgezettelTargets(app: App, file: TFile, propertyName: string): TFile[] {
+	const cache = app.metadataCache.getFileCache(file);
 	const value: unknown = cache?.frontmatter?.[propertyName];
 	if (value == null) return [];
 
@@ -80,8 +86,7 @@ export function buildGraph(app: App, propertyName: string): FolgezettelGraph {
 	const incoming = new Map<string, TFile[]>();
 
 	for (const file of app.vault.getMarkdownFiles()) {
-		const cache = app.metadataCache.getFileCache(file);
-		const targets = resolveTargets(app, file, cache, propertyName);
+		const targets = folgezettelTargets(app, file, propertyName);
 		if (targets.length === 0) continue;
 
 		outgoing.set(file.path, targets);

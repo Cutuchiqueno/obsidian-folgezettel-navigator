@@ -18,6 +18,7 @@ import { Plugin, WorkspaceLeaf } from "obsidian";
 import { FolgezettelView, VIEW_TYPE_FOLGEZETTEL } from "./view";
 import { DEFAULT_SETTINGS, FolgezettelSettings, FolgezettelSettingTab } from "./settings";
 import { registerNavigationCommands } from "./commands";
+import { registerAuthoringCommands } from "./authoring";
 
 export default class FolgezettelPlugin extends Plugin {
 	settings!: FolgezettelSettings;
@@ -37,6 +38,9 @@ export default class FolgezettelPlugin extends Plugin {
 
 		// Jump commands along the sequence; they work with or without the panel open.
 		registerNavigationCommands(this);
+
+		// Commands that extend the sequence: create or link a following note.
+		registerAuthoringCommands(this);
 
 		this.addSettingTab(new FolgezettelSettingTab(this.app, this));
 	}

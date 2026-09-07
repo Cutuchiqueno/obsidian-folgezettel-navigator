@@ -3,6 +3,30 @@
 All notable changes to Folgezettel Navigator are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+**Two commands for extending a sequence.** Until now the plugin only read the structure;
+these two write it. Both act on the note you are on and append to the **end** of its
+Folgezettel property, so what they add is a further branch and the current branch stays
+put.
+
+| Command | Does |
+| --- | --- |
+| Create following note | Asks for a name, creates the note, links it, and opens it |
+| Link following note | Opens a picker of the vault's notes and links the one you choose |
+
+*Create following note* asks for the name in a dialog modeled on Obsidian's rename
+dialog. A name that is empty, illegal, or already taken keeps the dialog open with the
+reason under the field, instead of throwing away what you typed. *Link following note*
+offers every note except the one you are on and the ones it already links to.
+
+**New note location setting.** Which folder *Create following note* creates notes in,
+with folder autocompletion as Obsidian's own path settings have. Left empty — the
+default — each note is created next to the note it continues. A folder that does not
+exist yet is created.
+
 ## [1.1.0] — 2026-09-02
 
 You can now move along a sequence from the keyboard, see at a glance what kind of note

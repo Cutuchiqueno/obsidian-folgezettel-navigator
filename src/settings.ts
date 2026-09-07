@@ -14,7 +14,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFolder } from "obsidian";
 import type FolgezettelPlugin from "./main";
 import { FOLGEZETTEL_KEY } from "./graph";
 
@@ -23,11 +23,17 @@ export interface FolgezettelSettings {
 	propertyName: string;
 	/** How many notes to show on each side (incoming and outgoing) of the active note. */
 	maxSteps: number;
+	/**
+	 * Folder that `Create following note` puts new notes in. Empty means "wherever the
+	 * note being continued lives"; "/" is the vault root.
+	 */
+	newNoteFolder: string;
 }
 
 export const DEFAULT_SETTINGS: FolgezettelSettings = {
 	propertyName: FOLGEZETTEL_KEY,
 	maxSteps: 5,
+	newNoteFolder: "",
 };
 
 export class FolgezettelSettingTab extends PluginSettingTab {
@@ -57,6 +63,24 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("New note location")
+			.setDesc(
+				"Folder that new Folgezettel notes are created in. Leave empty to create them " +
+					"next to the note they continue."
+			)
+			.addSearch((search) => {
+				search
+					.setPlaceholder("Same folder as the current note")
+					.setValue(this.plugin.settings.newNoteFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.newNoteFolder = value.trim();
+						await this.plugin.saveSettings();
+					});
+				// Type-ahead over the vault's folders, as Obsidian's own path settings have.
+				new FolderSuggest(this.app, search.inputEl);
+			});
+
+		new Setting(containerEl)
 			.setName("Sequence length")
 			.setDesc("How many incoming and outgoing notes to show on each side of the active note.")
 			.addSlider((slider) =>
@@ -68,5 +92,30 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+	}
+}
+
+/** Folder type-ahead for a path text field. */
+class FolderSuggest extends AbstractInputSuggest<TFolder> {
+	constructor(app: App, private input: HTMLInputElement) {
+		super(app, input);
+	}
+
+	protected getSuggestions(query: string): TFolder[] {
+		const needle = query.toLowerCase();
+		return this.app.vault
+			.getAllFolders(true)
+			.filter((folder) => folder.path.toLowerCase().includes(needle));
+	}
+
+	renderSuggestion(folder: TFolder, el: HTMLElement): void {
+		el.setText(folder.path);
+	}
+
+	selectSuggestion(folder: TFolder): void {
+		this.setValue(folder.path);
+		// The component's onChange listens for `input`; setValue alone does not fire it.
+		this.input.trigger("input");
+		this.close();
 	}
 }

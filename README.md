@@ -154,6 +154,30 @@ The panel uses the same rule, so a jump and the drawn sequence agree on where th
 runs — unless you have picked a different option in a junction card, which steers the
 panel for as long as you stay on that note.
 
+## Extending the sequence
+
+Two more commands write the sequence instead of walking it. Both act on the note you are
+on and add to the **end** of its `folgezettel` property — so the new note becomes a
+further branch off it, and the current branch (the first link) stays where it is.
+
+| Command | Does |
+| --- | --- |
+| **Create following note** | Asks for a name, creates the note, links it, and opens it |
+| **Link following note** | Opens a picker of the vault's notes and links the one you choose |
+
+*Create following note* opens a small dialog for the name — Enter or **Create** confirms,
+Escape cancels. A name that is empty, contains characters Obsidian does not allow in a
+file name, or is already taken keeps the dialog open and says why, so nothing you typed
+is lost. Where the note is created is up to the **New note location** setting below; a
+folder that does not exist yet is created.
+
+*Link following note* lists every markdown note except the one you are on and the ones
+this note already links to, so the list holds only notes that would actually add
+something. The link is written as a wikilink, shortened as far as your link settings
+allow — the same form Obsidian's own property editor writes.
+
+Like the jump commands, both disappear from the palette when no note is open.
+
 ## Interactions at a glance
 
 | Action | Result |
@@ -192,8 +216,11 @@ on touch — the rest of the workflow is identical.
   (default `folgezettel`). Change it to match your own naming convention.
 - **Sequence length** — how many notes to show on each side of the active note
   (1–10, default 5).
+- **New note location** — the folder *Create following note* puts new notes in, with
+  folder autocompletion. Leave it empty to create each note next to the note it
+  continues.
 
-Both apply immediately to any open panel.
+The first two apply immediately to any open panel.
 
 ## Installation
 

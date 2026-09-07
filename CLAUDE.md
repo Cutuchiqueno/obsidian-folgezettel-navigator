@@ -18,15 +18,18 @@ vault's `.obsidian/plugins/folgezettel-navigator/` and reload Obsidian.
 
 ## Architecture
 
-An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar and exposes
-jump commands along it. Six source files under `src/`, each a clear layer:
+An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar, exposes
+jump commands along it, and can extend it by a note. Eight source files under `src/`,
+each a clear layer:
 
 - **`graph.ts`** — pure data layer, no DOM. `buildGraph(app, propertyName)` scans every
   markdown file's configured Folgezettel frontmatter property (default `folgezettel`,
   via the metadata cache) and produces two adjacency maps: `outgoing` (A → its
   continuations) and `incoming` (the reverse edges). Pure function of vault state —
   there is deliberately **no incremental cache**; the graph is rebuilt on each render
-  because reading the already-parsed metadata cache is cheap.
+  because reading the already-parsed metadata cache is cheap. `folgezettelTargets` is
+  that scan for a *single* note (`outgoing[file]`); `buildGraph` is built out of it, and
+  `authoring.ts` uses it to see what a note already links to.
 - **`view.ts`** — `FolgezettelView` (an `ItemView`), constructed with the plugin so it
   can read live settings. Owns all DOM and rendering (each entry is a left gutter with
   the guide rail + a dot, then the title). Strand traversal lives here, not in
@@ -46,13 +49,31 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   table. Each entry reduces to a list of candidate notes, so the three outcomes are
   handled once: none → `Notice`, one → open, several → a `FuzzySuggestModal` picker.
   Commands use `checkCallback` so they hide themselves (and their hotkeys go inert) with
-  no active markdown note; the graph is only built when a command actually runs.
-- **`settings.ts`** — `FolgezettelSettings` (`propertyName`, `maxSteps`), `DEFAULT_SETTINGS`
-  (`folgezettel`, `5`), and the `FolgezettelSettingTab` (a text field for the property,
-  a `1–10` slider for the per-direction note count).
+  no active markdown note; the graph is only built when a command actually runs. It also
+  exports the two pieces every command needs — `activeNote` (the note a command acts
+  from) and `NotePicker` — which `authoring.ts` reuses.
+- **`authoring.ts`** — the two commands that *write* the sequence: `Create following
+  note` (name dialog → create → link → open) and `Link following note` (picker → link).
+  Both end in `appendFolgezettel`, one `processFrontMatter` call that puts a wikilink at
+  the **end** of the property. No DOM of its own beyond the two modals it opens.
+  `createAndLink` **opens the new note before writing the link, and opens it with
+  `active: true`** — both load-bearing, see "Opening and writing must not cross" below.
+- **`new-note-modal.ts`** — `NewNoteModal`, the name dialog, modeled on Obsidian's rename
+  dialog. It owns no rules: the caller passes `validate`, and a returned message keeps
+  the dialog open and appears under the field, so a rejected name is never lost to a
+  notice that also took the typed text with it.
+- **`settings.ts`** — `FolgezettelSettings` (`propertyName`, `maxSteps`,
+  `newNoteFolder`), `DEFAULT_SETTINGS` (`folgezettel`, `5`, `""`), and the
+  `FolgezettelSettingTab` (a text field for the property, a `1–10` slider for the
+  per-direction note count, a search field with folder type-ahead for the new-note
+  folder). The type-ahead is `FolderSuggest`, an `AbstractInputSuggest<TFolder>` over
+  `vault.getAllFolders(true)`; picking an option has to `trigger("input")` by hand,
+  because `setValue` alone does not fire the event the component's `onChange` listens
+  for.
 - **`main.ts`** — plugin entry: loads settings, registers the view type (passing itself
   to the view), the ribbon icon, the panel command, the navigation commands (via
-  `registerNavigationCommands`), and the settings tab. `saveSettings()`
+  `registerNavigationCommands`), the authoring commands (via
+  `registerAuthoringCommands`), and the settings tab. `saveSettings()`
   persists and then `refresh()`es every open pane so changes apply immediately.
 
 ### Key model decisions (read before changing traversal/rendering)
@@ -190,6 +211,32 @@ jump commands along it. Six source files under `src/`, each a clear layer:
   `branchSelections`, which is transient, pane-local exploration and resets with the
   note. Keep the two in step: changing the default on one side without the other
   re-opens the split this rule exists to close.
+- **A written link goes to the end, and only to the end.** Both authoring commands append,
+  never insert — so a new note is a further branch off the active note and the current
+  branch (the first entry) is left alone. Inserting at the front would silently re-route
+  every reader of that note, and every jump command with it. The value is always written
+  back as a **list**, even when it was a scalar or absent: order carries meaning here, and
+  a scalar has no room for the entry the next call adds. Blank entries (the empty list item
+  Obsidian leaves behind) are dropped on the way, since writing one back out yields a
+  broken link. The link itself is `[[…]]` around `metadataCache.fileToLinktext`, which is
+  what Obsidian's own property editor writes and what `graph.ts:toLinkpath` reads back —
+  `generateMarkdownLink` is **not** used, because with markdown links enabled it would
+  produce a form the property never holds and the graph cannot resolve.
+- **Opening and writing must not cross.** Writing a note's frontmatter schedules a
+  re-render in every view showing *that* note — Obsidian's Properties pane most visibly.
+  Open a different note in between and the pane rebinds to the new file while the pending
+  update paints the **old** note's rows into it, and nothing re-renders it again until the
+  new note itself changes: the reader sits in a new note described by the properties of
+  the one they left. So `createAndLink` opens first and appends afterwards. A delay
+  between the two works as well and is worse — it makes correctness a matter of timing.
+  Opening also has to pass `active: true`: the name dialog took focus off the editor, and
+  without it the file opens in a pane that never becomes active, leaving every view that
+  follows the active file a note behind. The same is true of `commands.ts:open`, which the
+  command palette (a modal itself) can reach with the editor unfocused.
+- **New notes land next to the note they continue, unless told otherwise.** An empty
+  `newNoteFolder` means "the source note's own folder", `"/"` (what the folder picker
+  writes for the vault root) means the root, and a missing folder is created. So the
+  default needs no configuration and keeps a Zettelkasten's notes together.
 - **`findParent` is not `findPreviousJunction`.** The previous junction is the nearest
   ancestor that forks at all. The *parent* is the nearest ancestor that forks **and**
   whose fork this strand left by a non-first link — i.e. where the current branch was

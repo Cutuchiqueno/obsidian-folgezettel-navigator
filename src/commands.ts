@@ -130,19 +130,30 @@ function run(plugin: FolgezettelPlugin, command: NavigationCommand, from: TFile)
 	).open();
 }
 
-/** The note a jump starts from: the active markdown file, if there is one. */
-function activeNote(app: App): TFile | null {
+/**
+ * The note a command acts from: the active markdown file, if there is one. Shared with
+ * the authoring commands, which start from the same note.
+ */
+export function activeNote(app: App): TFile | null {
 	const file = app.workspace.getActiveFile();
 	return file && file.extension === "md" ? file : null;
 }
 
-/** Open in the current editor, matching what a plain link click does. */
+/**
+ * Open in the current editor, matching what a plain link click does.
+ *
+ * `active: true` because a command can run with the editor unfocused — from the command
+ * palette, which is itself a modal, or with a sidebar in focus. The file would open
+ * either way, but the pane would not become active, and the sidebar views that follow
+ * the active file (Properties, Outline, Backlinks) would keep showing the note we just
+ * left.
+ */
 async function open(app: App, file: TFile): Promise<void> {
-	await app.workspace.getLeaf(false).openFile(file);
+	await app.workspace.getLeaf(false).openFile(file, { active: true });
 }
 
-/** Fuzzy picker over a fixed set of notes, used when a jump has several targets. */
-class NotePicker extends FuzzySuggestModal<TFile> {
+/** Fuzzy picker over a fixed set of notes, used whenever a command has several. */
+export class NotePicker extends FuzzySuggestModal<TFile> {
 	constructor(
 		app: App,
 		private files: TFile[],
