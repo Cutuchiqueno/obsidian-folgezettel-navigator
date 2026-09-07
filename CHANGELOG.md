@@ -3,7 +3,10 @@
 All notable changes to Folgezettel Navigator are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] — 2026-09-08
+
+The panel stops being read-only. You can now grow a sequence from it, act on any note in it
+without leaving the pane, and see at a glance which notes you have bookmarked.
 
 ### Added
 
@@ -22,14 +25,31 @@ dialog. A name that is empty, illegal, or already taken keeps the dialog open wi
 reason under the field, instead of throwing away what you typed. *Link following note*
 offers every note except the one you are on and the ones it already links to.
 
-**The settings are searchable.** All three are declared to Obsidian (1.13 and later), so
-they turn up in the search at the top of the settings window instead of only on the
-plugin's own tab. On older versions the tab renders as before.
+**Right-click a note in the panel for its menu.** Every entry now carries a context menu, so
+you can act on any note in the sequence without leaving the panel: open it in a tab, split or
+window, rename, move, bookmark, delete, copy its path, or reveal it. On mobile, press and
+hold a note for the same menu; a press that turns into a flick scrolls the panel instead.
+
+The menu also carries **Create following note** and **Link following note**, and — unlike the
+commands, which always act on the note you are in — they extend the note you right-clicked.
+So you can grow a branch anywhere in the sequence on show without navigating there first.
+
+**Bookmarked notes stand out on the rail.** A note you have bookmarked keeps whatever marker
+it would have — dot, numbered branch circle, or an open circle at either end of the thread —
+and draws it in the muted complement of your accent colour: olive-gold against Obsidian's
+default violet, and it follows the accent if you change it. So your bookmarks are visible
+along the sequence without hiding what kind of note each one is. It reads Obsidian's core
+Bookmarks plugin, groups included, and updates as you bookmark and unbookmark. With that
+plugin turned off, nothing changes.
 
 **New note location setting.** Which folder *Create following note* creates notes in,
 with folder autocompletion as Obsidian's own path settings have. Left empty — the
 default — each note is created next to the note it continues. A folder that does not
 exist yet is created.
+
+**The settings are searchable.** All three are declared to Obsidian (1.13 and later), so
+they turn up in the search at the top of the settings window instead of only on the
+plugin's own tab. On older versions the tab renders as before.
 
 ## [1.1.0] — 2026-09-02
 

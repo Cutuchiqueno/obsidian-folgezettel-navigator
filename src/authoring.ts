@@ -57,8 +57,14 @@ export function registerAuthoringCommands(plugin: FolgezettelPlugin): void {
 	});
 }
 
-/** Ask for a name, then create the note there and link it. */
-function askForNewNote(plugin: FolgezettelPlugin, source: TFile): void {
+/**
+ * Ask for a name, then create the note there and link it.
+ *
+ * Exported because the panel's context menu offers the same thing on the note that was
+ * right-clicked, which is not necessarily the active one — hence `source` as a parameter
+ * rather than a lookup in here.
+ */
+export function askForNewNote(plugin: FolgezettelPlugin, source: TFile): void {
 	// Resolved once, before the dialog opens, so the name check and the creation agree.
 	const folder = targetFolder(plugin, source);
 
@@ -71,8 +77,8 @@ function askForNewNote(plugin: FolgezettelPlugin, source: TFile): void {
 	}).open();
 }
 
-/** Let the reader pick any other note, then link it. */
-function pickNoteToLink(plugin: FolgezettelPlugin, source: TFile): void {
+/** Let the reader pick any other note, then link it. Exported like `askForNewNote`. */
+export function pickNoteToLink(plugin: FolgezettelPlugin, source: TFile): void {
 	const { app } = plugin;
 	const linked = new Set(
 		folgezettelTargets(app, source, plugin.settings.propertyName).map((file) => file.path)

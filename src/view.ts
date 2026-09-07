@@ -14,7 +14,9 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { HoverPopover, ItemView, Platform, TFile, WorkspaceLeaf } from "obsidian";
+import { HoverPopover, ItemView, Menu, Platform, TFile, WorkspaceLeaf } from "obsidian";
+import { askForNewNote, pickNoteToLink } from "./authoring";
+import { bookmarkedPaths, onBookmarksChanged } from "./bookmarks";
 import { buildGraph, FolgezettelGraph } from "./graph";
 import { findLeaf, findParent } from "./navigate";
 import type FolgezettelPlugin from "./main";
@@ -24,11 +26,63 @@ export const VIEW_TYPE_FOLGEZETTEL = "folgezettel-navigator-view";
 /** Safety bound on strand-walk iterations (cycles are already guarded by `visited`). */
 const MAX_ITERATIONS = 100;
 
+/** How long a finger must rest on an entry before it counts as a long press. */
+const LONG_PRESS_MS = 500;
+/** Move further than this during a press and it was a scroll, not a press. */
+const LONG_PRESS_SLOP_PX = 10;
+/**
+ * A WebView that fires `contextmenu` for a long press of its own would open a second menu
+ * on top of ours. One opened by our timer swallows any that arrives within this window.
+ */
+const PRESS_MENU_GRACE_MS = 1000;
+
 /**
  * Which part of the strand an entry belongs to. Styling and state keys only — the panel
  * is walked and drawn as **one** strand, top to bottom, not as two opposed halves.
  */
 type EntryKind = "incoming" | "outgoing" | "active";
+
+/**
+ * What the `file-menu` event contributes that has no use on a Folgezettel entry, and how to
+ * recognise it without reading its title.
+ *
+ * Titles are the obvious key and the wrong one: they are localised, so matching them would
+ * quietly stop pruning the moment Obsidian is run in another language. Section, icon and the
+ * source of the item's callback all survive translation. `view.linked` is the whole
+ * open-a-linked-view group (local graph, backlinks, outgoing links, properties, outline) —
+ * views about the note, not operations on the file. "Merge entire file with..." is alone in
+ * carrying `lucide-git-merge`. "Open in default app" shares both its section and its icon
+ * with "Show in system explorer", which stays, so it is told apart by the one thing that
+ * differs: the `openWithDefaultApp` call in its callback.
+ */
+const PRUNED_MENU_ITEMS: { section: string; icon?: string; callback?: string }[] = [
+	{ section: "view.linked" },
+	{ section: "action", icon: "lucide-git-merge" },
+	{ section: "system", callback: "openWithDefaultApp" },
+];
+
+/** The parts of a built `Menu` the pruning has to reach; none of them are public API. */
+interface MenuInternals {
+	items?: MenuItemInternals[];
+}
+
+interface MenuItemInternals {
+	section?: string;
+	dom?: HTMLElement;
+	iconEl?: HTMLElement;
+	callback?: unknown;
+}
+
+/**
+ * The two prompts the context menu needs. Both exist on `app.fileManager` and both are
+ * missing from `obsidian.d.ts`, so they are reached the way `bookmarks.ts` reaches the
+ * Bookmarks plugin: a structural type, and the menu item is only offered when the method is
+ * actually there.
+ */
+interface FileManagerPrompts {
+	promptForFileRename?: (file: TFile) => unknown;
+	promptForDeletion?: (file: TFile) => unknown;
+}
 
 /** A fork on show: the branches it opens, and the key its expanded state is stored under. */
 interface BranchMenu {
@@ -54,6 +108,20 @@ export class FolgezettelView extends ItemView {
 	private previewBranch: { key: string; path: string } | null = null;
 	/** Cached graph for the current render, reused by on-hover continuation rebuilds. */
 	private graph: FolgezettelGraph | null = null;
+	/** Pending long-press timer, if a finger is currently resting on an entry. */
+	private pressTimer: number | null = null;
+	/** Where the finger went down, so movement can tell a scroll from a press. */
+	private pressStart: { x: number; y: number } | null = null;
+	/** When a long press last opened a menu — see `PRESS_MENU_GRACE_MS`. */
+	private pressMenuTime = 0;
+	/** Set when a long press opened a menu, so the tap that ends it does not also navigate. */
+	private swallowNextTap = false;
+	/**
+	 * Paths of the bookmarked notes, read at the start of each render. Entries whose note
+	 * is in here draw their gutter icon — dot, ring or branch circle alike — in the
+	 * bookmark colour, so a marked note is recognisable whatever kind of note it is.
+	 */
+	private bookmarks = new Set<string>();
 	/**
 	 * Per-card handle to the DOM container holding **everything below** that card, with
 	 * the two things that can go in it: what actually belongs there, and the strand a
@@ -109,12 +177,18 @@ export class FolgezettelView extends ItemView {
 		// Vault link changes can alter the sequence for the current note.
 		this.registerEvent(this.app.metadataCache.on("resolved", () => this.render()));
 		this.registerEvent(this.app.metadataCache.on("changed", () => this.render()));
+		// Bookmarking a note recolours its marker, so follow the bookmarks too. The core
+		// plugin is optional and unofficial (see `bookmarks.ts`): when it gives us no event
+		// the colour simply waits for the next render there would have been anyway.
+		const bookmarksChanged = onBookmarksChanged(this.app, () => this.render());
+		if (bookmarksChanged) this.registerEvent(bookmarksChanged);
 
 		this.render();
 	}
 
 	async onClose(): Promise<void> {
-		// Nothing to tear down: all DOM lives inside contentEl.
+		// All DOM lives inside contentEl; only a long press in flight outlives it.
+		this.cancelLongPress();
 	}
 
 	/** Path of the active markdown note, or null when the active view has none. */
@@ -147,6 +221,7 @@ export class FolgezettelView extends ItemView {
 
 		const { propertyName, maxSteps } = this.plugin.settings;
 		this.graph = buildGraph(this.app, propertyName);
+		this.bookmarks = bookmarkedPaths(this.app);
 		this.branchContinuations.clear();
 
 		const list = el.createDiv({ cls: "folgezettel-list" });
@@ -364,7 +439,9 @@ export class FolgezettelView extends ItemView {
 		const forks = options.length >= 2;
 
 		const row = parent.createDiv({
-			cls: `folgezettel-entry is-branch is-incoming is-detached${forks ? "" : " is-root"}`,
+			cls: `folgezettel-entry is-branch is-incoming is-detached${forks ? "" : " is-root"}${
+				this.isBookmarked(file) ? " is-bookmarked" : ""
+			}`,
 		});
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
 		marker.createDiv({
@@ -498,7 +575,9 @@ export class FolgezettelView extends ItemView {
 		// so a real ending reads differently from a strand the step cap merely cut short.
 		const leaf = (this.graph?.outgoing.get(file.path)?.length ?? 0) === 0;
 		const row = parent.createDiv({
-			cls: `folgezettel-entry is-${kind}${detached ? " is-detached" : ""}${leaf ? " is-leaf" : ""}`,
+			cls: `folgezettel-entry is-${kind}${detached ? " is-detached" : ""}${leaf ? " is-leaf" : ""}${
+				this.isBookmarked(file) ? " is-bookmarked" : ""
+			}`,
 		});
 
 		// Left gutter: the indentation guide rail and a dot marking the note — accent for
@@ -510,6 +589,15 @@ export class FolgezettelView extends ItemView {
 
 		this.renderTitleLink(row, file);
 		return marker;
+	}
+
+	/**
+	 * Whether the note is bookmarked, and so takes the bookmark colour in the gutter. The
+	 * class goes on the *row*, not the icon, so the one rule covers whichever icon that row
+	 * ends up with — including the branch circle `attachBranchToggle` swaps in later.
+	 */
+	private isBookmarked(file: TFile): boolean {
+		return this.bookmarks.has(file.path);
 	}
 
 	private setPreviewBranch(key: string, path: string): void {
@@ -536,12 +624,197 @@ export class FolgezettelView extends ItemView {
 		});
 		this.attachNavigation(link, file);
 		this.attachHoverPreview(link, file);
+		this.attachContextMenu(link, file);
+	}
+
+	/**
+	 * The note's file menu, reachable the way each platform reaches one: right-click on the
+	 * desktop, a long press on touch. Both end in the same `Menu` — see `fileMenu` — shown at
+	 * the pointer or at the finger.
+	 *
+	 * The `contextmenu` handler is attached on every platform, not just the desktop: a tablet
+	 * with a mouse or trackpad is `Platform.isMobile` and can still right-click. Where a
+	 * WebView also fires `contextmenu` for its own long press, the two would race; the timer
+	 * cancels on `contextmenu`, and a menu the timer has just opened swallows one arriving
+	 * behind it.
+	 */
+	private attachContextMenu(link: HTMLElement, file: TFile): void {
+		link.addEventListener("contextmenu", (event: MouseEvent) => {
+			event.preventDefault();
+			this.cancelLongPress();
+			if (Date.now() - this.pressMenuTime < PRESS_MENU_GRACE_MS) return;
+			this.fileMenu(file).showAtMouseEvent(event);
+		});
+		if (Platform.isMobile) this.attachLongPress(link, file);
+	}
+
+	/**
+	 * Touch's stand-in for a right-click: rest a finger on an entry and its menu opens under
+	 * it, as it does on a file in Obsidian's own mobile file explorer.
+	 *
+	 * Every listener is passive — a press must never swallow a scroll, and the panel is a
+	 * scrolling list — so the press is cancelled by movement past `LONG_PRESS_SLOP_PX`
+	 * instead: a flick that starts on an entry is a scroll, not a press. A second finger
+	 * cancels it too. What the press cannot prevent is the `click` its own release fires, so
+	 * it marks that tap to be swallowed rather than opening the note behind the menu.
+	 */
+	private attachLongPress(link: HTMLElement, file: TFile): void {
+		link.addEventListener(
+			"touchstart",
+			(event: TouchEvent) => {
+				this.cancelLongPress();
+				const touch = event.touches[0];
+				if (!touch || event.touches.length > 1) return;
+
+				const { clientX: x, clientY: y } = touch;
+				this.pressStart = { x, y };
+				this.pressTimer = window.setTimeout(() => {
+					this.pressTimer = null;
+					this.pressStart = null;
+					this.pressMenuTime = Date.now();
+					this.swallowNextTap = true;
+					this.fileMenu(file).showAtPosition({ x, y });
+				}, LONG_PRESS_MS);
+			},
+			{ passive: true }
+		);
+		link.addEventListener(
+			"touchmove",
+			(event: TouchEvent) => {
+				const touch = event.touches[0];
+				const start = this.pressStart;
+				if (!touch || !start) return;
+				if (
+					Math.abs(touch.clientX - start.x) > LONG_PRESS_SLOP_PX ||
+					Math.abs(touch.clientY - start.y) > LONG_PRESS_SLOP_PX
+				) {
+					this.cancelLongPress();
+				}
+			},
+			{ passive: true }
+		);
+		link.addEventListener("touchend", () => this.cancelLongPress(), { passive: true });
+		link.addEventListener("touchcancel", () => this.cancelLongPress(), { passive: true });
+	}
+
+	/** Drop a press in flight: it ended, moved off, or something else took over. */
+	private cancelLongPress(): void {
+		if (this.pressTimer !== null) window.clearTimeout(this.pressTimer);
+		this.pressTimer = null;
+		this.pressStart = null;
+	}
+
+	/**
+	 * The note's file menu, as the File Explorer and the graph view give it.
+	 *
+	 * Obsidian has no shared builder for that menu — every call site assembles its own items
+	 * and then fires `file-menu` — so this does the same: the handful of items a note gets
+	 * everywhere, then the event, which is the documented extension point and what lets every
+	 * other plugin (the core ones included) add theirs. Sections are named as core names them
+	 * so the contributed items interleave where they belong rather than piling up at the end.
+	 *
+	 * Which items to add is decided by what the event does *not* already bring. Measured
+	 * against a live vault, its listeners supply "Open in new window", "Move file to...",
+	 * "Copy path", "Show in system explorer", "Reveal file in navigation" and the bookmark
+	 * item — but neither "Rename" nor "Delete", and neither of the two open-here actions.
+	 * Adding one the event also adds puts it in the menu twice, which is how "Open in new
+	 * window" was cut again.
+	 *
+	 * The two authoring items are this panel's own and go in their own section, which lands
+	 * between the open group and the file operations because `Menu` orders sections by first
+	 * appearance and they are added before the event fires. Both act on the note that was
+	 * right-clicked, not on the active one — that is the whole point of having them here.
+	 *
+	 * Afterwards `pruneMenu` takes back what the event brought that has no place on a
+	 * Folgezettel entry; see `PRUNED_MENU_ITEMS`. There is no menu without a note under the
+	 * cursor, so nothing here has to handle the empty case the commands do.
+	 */
+	private fileMenu(file: TFile): Menu {
+		const menu = new Menu();
+		const prompts = this.app.fileManager as FileManagerPrompts;
+
+		menu.addItem((item) =>
+			item
+				.setSection("open")
+				.setTitle("Open in new tab")
+				.setIcon("lucide-file-plus")
+				.onClick(() => void this.app.workspace.getLeaf("tab").openFile(file))
+		);
+		menu.addItem((item) =>
+			item
+				.setSection("open")
+				.setTitle("Open to the right")
+				.setIcon("lucide-separator-vertical")
+				.onClick(() => void this.app.workspace.getLeaf("split").openFile(file))
+		);
+		menu.addItem((item) =>
+			item
+				.setSection("folgezettel")
+				.setTitle("Create following note")
+				.setIcon("lucide-git-branch-plus")
+				.onClick(() => askForNewNote(this.plugin, file))
+		);
+		menu.addItem((item) =>
+			item
+				.setSection("folgezettel")
+				.setTitle("Link following note")
+				.setIcon("lucide-link-2")
+				.onClick(() => pickNoteToLink(this.plugin, file))
+		);
+		if (prompts.promptForFileRename) {
+			menu.addItem((item) =>
+				item
+					.setSection("action")
+					.setTitle("Rename...")
+					.setIcon("lucide-pencil")
+					.onClick(() => prompts.promptForFileRename?.(file))
+			);
+		}
+		if (prompts.promptForDeletion) {
+			menu.addItem((item) =>
+				item
+					.setSection("danger")
+					.setTitle("Delete")
+					.setIcon("lucide-trash-2")
+					.setWarning(true)
+					.onClick(() => prompts.promptForDeletion?.(file))
+			);
+		}
+
+		this.app.workspace.trigger("file-menu", menu, file, VIEW_TYPE_FOLGEZETTEL, this.leaf);
+		this.pruneMenu(menu);
+		return menu;
+	}
+
+	/**
+	 * Drop the contributed items listed in `PRUNED_MENU_ITEMS` from a menu that has been
+	 * built but not yet shown. Obsidian offers no way to remove an item, so this reaches into
+	 * `menu.items` — hence `MenuInternals`, and hence the guards: a version that renames the
+	 * field simply prunes nothing and the menu is longer than intended, never broken. The DOM
+	 * node has to go with the entry, since `Menu` appends each item's element as it is added
+	 * and only reorders them at show time.
+	 */
+	private pruneMenu(menu: Menu): void {
+		const items = (menu as Menu & MenuInternals).items;
+		if (!items) return;
+
+		for (let i = items.length - 1; i >= 0; i--) {
+			if (!isPrunedMenuItem(items[i])) continue;
+			items[i].dom?.detach();
+			items.splice(i, 1);
+		}
 	}
 
 	/** Click / modifier-click to open the note, matching Obsidian link behaviour. */
 	private attachNavigation(link: HTMLElement, file: TFile): void {
 		link.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
+			// The tap that ends a long press still arrives as a click; it belongs to the menu
+			// that press opened, not to the title under it.
+			if (this.swallowNextTap) {
+				this.swallowNextTap = false;
+				return;
+			}
 			const newLeaf = event.ctrlKey || event.metaKey;
 			void this.app.workspace.getLeaf(newLeaf).openFile(file);
 		});
@@ -562,6 +835,16 @@ export class FolgezettelView extends ItemView {
 			});
 		});
 	}
+}
+
+/** Whether a contributed menu item matches one of the `PRUNED_MENU_ITEMS` rules. */
+function isPrunedMenuItem(item: MenuItemInternals): boolean {
+	return PRUNED_MENU_ITEMS.some((rule) => {
+		if (rule.section !== item.section) return false;
+		if (rule.icon && !item.iconEl?.querySelector("svg")?.classList.contains(rule.icon)) return false;
+		if (rule.callback && !String(item.callback).includes(rule.callback)) return false;
+		return true;
+	});
 }
 
 function branchKey(kind: EntryKind, junction: TFile): string {

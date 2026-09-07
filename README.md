@@ -65,9 +65,18 @@ The marker on that rail tells you what kind of note each entry is:
 | Small open circle | A note nothing continues — the end of the thread |
 | Large open circle | The beginning of the structure |
 
-Whichever marker it has, the note you are on is drawn in the accent colour. The number
-lets you size up a fork without opening it, and the open circles keep a thread that
-genuinely ends distinct from one the panel merely cut short at its limit.
+A **bookmarked** note keeps the marker its role calls for and draws it in the muted
+complement of your accent colour instead — olive-gold against Obsidian's default violet —
+so you can see at a glance where your bookmarks sit along the thread without losing what
+kind of note each one is. It follows Obsidian's core Bookmarks plugin (bookmarks inside
+groups included) and updates as you bookmark and unbookmark. A bookmark pointing at a
+*heading* inside a note does not count, matching Obsidian's own reading of which notes are
+bookmarked; with the Bookmarks plugin turned off, nothing changes.
+
+Whichever marker it has, the note you are on is drawn in the accent colour — unless it is
+bookmarked, in which case the bookmark colour wins, since the row it sits on is highlighted
+anyway. The number lets you size up a fork without opening it, and the open circles keep a
+thread that genuinely ends distinct from one the panel merely cut short at its limit.
 
 Switch to another note and the panel redraws around it. By default it shows up to five
 notes on each side (configurable — see [Settings](#settings)). If the pane is too short
@@ -178,11 +187,16 @@ allow — the same form Obsidian's own property editor writes.
 
 Like the jump commands, both disappear from the palette when no note is open.
 
+Both are also on the panel's **right-click menu**, and there they act on the note you
+right-clicked rather than the note you are in — so you can hang a new note off any entry in
+the sequence without navigating to it first.
+
 ## Interactions at a glance
 
 | Action | Result |
 | --- | --- |
 | **Click** a note title | Opens the note; the panel redraws around it |
+| **Right-click** a note title *(long press on mobile)* | That note's menu: open it elsewhere, create or link a following note, rename, move, bookmark, delete, reveal |
 | **Hover** a title *(desktop)* | Obsidian's native page preview, following your Page preview setting |
 | **Click** a junction's numbered circle | Expand / collapse the list of its branches, on the row below |
 | **Hover** a branch option *(desktop)* | Preview that branch, without committing to it |
@@ -196,7 +210,9 @@ note, while clicking the **numbered circle** opens the branch list.
 ### On mobile
 
 The plugin works on Obsidian Mobile. Everything is tap-driven: tap a title to open it,
-tap a junction's numbered circle to expand it, tap an option to take that branch. The
+tap a junction's numbered circle to expand it, tap an option to take that branch. **Press and
+hold** a note for its file menu, the same one a right-click gives on the desktop — the press
+gives way to a scroll, so flicking through a long sequence still scrolls the panel. The
 hover-only previews (branch preview and page preview) are desktop affordances and are simply absent
 on touch — the rest of the workflow is identical.
 

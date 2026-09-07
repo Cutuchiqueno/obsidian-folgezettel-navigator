@@ -19,7 +19,7 @@ vault's `.obsidian/plugins/folgezettel-navigator/` and reload Obsidian.
 ## Architecture
 
 An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar, exposes
-jump commands along it, and can extend it by a note. Eight source files under `src/`,
+jump commands along it, and can extend it by a note. Nine source files under `src/`,
 each a clear layer:
 
 - **`graph.ts`** — pure data layer, no DOM. `buildGraph(app, propertyName)` scans every
@@ -39,7 +39,18 @@ each a clear layer:
   the continuations. At a card, everything below moves into a continuation container
   (`branchContinuations`) that a hover preview rebuilds in place (see below).
   `renderStartOfBranch` and `renderEndOfBranch` add the detached entries at the two ends.
-  `refresh()` re-renders on demand.
+  `refresh()` re-renders on demand. Each render also reads `bookmarkedPaths` once (see
+  `bookmarks.ts`) so entries can be marked as bookmarked, and every entry's title carries the
+  vault's file context menu (`attachContextMenu`, see below).
+- **`bookmarks.ts`** — `bookmarkedPaths(app)` (the paths of every bookmarked note) and
+  `onBookmarksChanged(app, cb)`, read off Obsidian's **core Bookmarks plugin**. That plugin
+  is not public API — neither `app.internalPlugins` nor its instance appears in
+  `obsidian.d.ts` — so the whole module is a narrow structural type over it and every step
+  is optional: disabled, missing or reshaped, the panel draws no bookmarks rather than
+  failing to draw. Only whole-`file` entries count — Obsidian's own reading of "this note is
+  bookmarked": a bookmarked *folder* bookmarks the folder, not its notes, and an entry with
+  a `subpath` marks a heading or block, which is why Obsidian leaves that note's tab header
+  unmarked. Groups are walked through. Read fresh per render like the graph, and for the same reason.
 - **`navigate.ts`** — pure jump targets over a `FolgezettelGraph`, no DOM and no `App`:
   `previousNotes`/`nextNotes` (the two axes) plus `findParent`, `findLeaf`,
   `findNextJunction`, `findPreviousJunction`. Every walk carries a `visited` set, so a
@@ -54,6 +65,9 @@ each a clear layer:
   from) and `NotePicker` — which `authoring.ts` reuses.
 - **`authoring.ts`** — the two commands that *write* the sequence: `Create following
   note` (name dialog → create → link → open) and `Link following note` (picker → link).
+  Both entry points (`askForNewNote`, `pickNoteToLink`) take their source note as a parameter
+  and are exported, because the panel's context menu offers the same two actions on the note
+  that was right-clicked rather than the active one.
   Both end in `appendFolgezettel`, one `processFrontMatter` call that puts a wikilink at
   the **end** of the property. No DOM of its own beyond the two modals it opens.
   `createAndLink` **opens the new note before writing the link, and opens it with
@@ -130,7 +144,8 @@ each a clear layer:
   like any row). The upward chain is collected by `walkUp` and drawn farthest-first, so
   top-to-bottom reads with the sequence.
 - **Each strand ends in a detached far-end entry.** Where the per-direction cap cuts a
-  walk short, `renderFarEnd` appends one extra entry past the end: upward the note the
+  walk short, one extra entry is appended past the end — `renderStartOfBranch` at the top,
+  `renderEndOfBranch` at the bottom: upward the note the
   current branch was started from (`findParent` from the **active** note — it is that
   note's branch on show), downward the note the strand runs out at (`findLeaf` from the
   **last drawn** note, so a branch the reader picked or is previewing ends at *its* leaf,
@@ -200,6 +215,14 @@ each a clear layer:
   (chosen option stays first). **The hover handlers are attached only when
   `!Platform.isMobile`** — touch has no hover and never fires `mouseleave`, so a mobile
   preview would get stuck; mobile relies on tap-to-select (the option `click` handler).
+- **A bookmark is a colour, never a shape.** A bookmarked note keeps whatever gutter icon
+  its role calls for — dot, hollow leaf ring, or the numbered branch circle — and changes
+  only its colour, so the marker still answers "what kind of note is this?" while the
+  bookmark reads at a glance. `renderEntry` and `renderFarEndParent` put `is-bookmarked` on
+  the **row**, not the icon, so the one rule per shape covers every icon that row can end up
+  with — including the branch circle `attachBranchToggle` swaps in afterwards. The colour
+  wins over the active note's accent (see Styling), because the active row is already marked
+  by its own highlight.
 - **Rendering is otherwise full teardown.** `render()` calls `contentEl.empty()` and
   rebuilds; expand/select/navigation mutate state and call `render()` (hover preview is
   the lone exception, above). It is wired to `metadataCache` `resolved`/`changed`, and —
@@ -277,8 +300,57 @@ each a clear layer:
   user's "hover to preview" / Ctrl-key setting for free — do not reimplement previews.
   Skipped on `Platform.isMobile` (a tap just opens the note).
 - **Mobile:** the plugin is mobile-compatible (`isDesktopOnly: false`, no Node/Electron
-  APIs). Everything works by tap; only the two desktop **hover** affordances — the branch
-  option preview and the page preview — are gated off via `Platform.isMobile`.
+  APIs). Everything works by tap, with a **long press** standing in for the right-click file
+  menu (above); only the two desktop **hover** affordances — the branch option preview and the
+  page preview — are gated off via `Platform.isMobile`.
+- **Bookmarks:** `app.internalPlugins.getPluginById("bookmarks")`, through `bookmarks.ts`
+  — unofficial, hence the defensive reading there. Its instance's `changed` event re-renders
+  the open panels (registered in `view.ts:onOpen`); when it is unavailable the colour simply
+  waits for the next render there would have been anyway. The subscription is made once, at
+  `onOpen`, so a Bookmarks plugin *enabled later* is picked up by `bookmarkedPaths` (read per
+  render) but stops delivering its own live updates until the pane is reopened.
+- **File context menu:** right-clicking a title builds a `Menu` in `fileMenu`, adds what the
+  vault gives a note plus this panel's own two authoring actions, fires
+  `workspace.trigger("file-menu", menu, file, VIEW_TYPE, leaf)`, and then **prunes** what came
+  back. Obsidian has **no shared builder** for that menu — the File Explorer, the graph view
+  and the canvas each assemble their own items and then fire the same event — so the menu is
+  assembled from three sides:
+  - *Added here:* "Open in new tab", "Open to the right", "Rename...", "Delete" — measured
+    against a live vault, the only wanted items the event does **not** bring. Add one it does
+    bring and it appears twice (how "Open in new window" came and went). Rename and delete go
+    through `fileManager.promptForFileRename` / `promptForDeletion`: real, absent from
+    `obsidian.d.ts`, reached through a structural type, and each item is offered only when its
+    method is there.
+  - *This panel's own:* "Create following note" and "Link following note", in a `folgezettel`
+    section of their own, which lands between the open group and the file operations because
+    `Menu` orders sections by first appearance and these are added before the event fires.
+    Both call into `authoring.ts` with **the right-clicked note** as the source, not the
+    active one — the commands cannot do that, and it is the reason the menu carries them.
+  - *Pruned afterwards:* `PRUNED_MENU_ITEMS` — the `view.linked` group (local graph,
+    backlinks, outgoing links, properties, outline: views about a note, not operations on a
+    file), "Merge entire file with...", and "Open in default app". Matching is by section,
+    icon and callback source, never by **title**, which is localised and would stop matching
+    the moment Obsidian runs in another language. The first two are unique by section and
+    icon; "Open in default app" shares both with "Show in system explorer", which stays, so it
+    is told apart by the `openWithDefaultApp` in its callback. `pruneMenu` reaches into
+    `menu.items` (no public way to remove an item) and detaches each entry's DOM node with it,
+    since `Menu` appends nodes as items are added and only reorders at show time; every step
+    is guarded, so a renamed internal prunes nothing rather than breaking the menu.
+
+  Sections are named as core names them (`open`, `action`, `danger`) so contributed items
+  interleave instead of piling up; there is no `title` label item, by request. The handler
+  sits on the title link, which fills the row apart from the gutter — so the branch circle
+  keeps its own gutter, and a right-click there does nothing.
+- **Long press is the touch spelling of that menu.** `attachLongPress` (mobile only) opens the
+  same `Menu` with `showAtPosition` after `LONG_PRESS_MS` on the finger. Three things make it
+  behave: every listener is **passive**, because the panel is a scrolling list and a press
+  must never swallow a scroll — so a move past `LONG_PRESS_SLOP_PX` (or a second finger)
+  cancels it instead; the release still fires a `click`, which `swallowNextTap` eats so the
+  note behind the menu does not open; and `contextmenu` stays attached on mobile too (a tablet
+  with a trackpad can right-click), with the timer cancelling on `contextmenu` and a
+  timer-opened menu swallowing any `contextmenu` a WebView fires behind it within
+  `PRESS_MENU_GRACE_MS`. Verified under `app.emulateMobile(true)`: press opens the menu and
+  the release does not navigate, a 40px move cancels it, a quick tap still opens the note.
 - **Navigation:** `workspace.getLeaf(newLeaf).openFile(file)`; Ctrl/Cmd-click opens in a
   new leaf, matching native link behavior. Selecting a branch option, by contrast, never
   opens a note — it only mutates pane state and re-renders.
@@ -340,6 +412,40 @@ than a rule that clears the highlight when the list is hovered: hovering the cur
 would then have to out-specify its own clearing rule. With `:not(:hover)` the two rules
 never overlap — inside the list only `.folgezettel-branch-option:hover` applies, and the
 background simply follows the cursor.
+
+A **bookmarked** note's icon is drawn in `--fz-bookmark-color`, the **muted complement of the
+accent** — derived from it, not picked: `oklch(from var(--interactive-accent) l c calc(h +
+180))` is the accent's own lightness and chroma at the opposite hue, and mixing that 60% into
+`--nav-item-color` (the muted grey every other marker uses) takes the glare off. So the marker
+follows whatever accent the theme or the reader sets and stays the farthest hue from it by
+construction: violet `#8a5cf5` → olive-gold `#969c2e`, red → teal, green → mauve, blue →
+ochre (all measured live).
+
+The colour has to stay clear of the accent (which already means "the note you are on") *and*
+belong to the panel, and those answer to different properties: **hue carries the distance,
+chroma carries the glare.** Three fixed colours got there the slow way and all failed on one
+axis or the other. `--color-yellow` sits 4° off the true complement at full chroma — maximum
+distance *and* maximum vibration, which is exactly the pair that glares; `--color-cyan` glared
+the same way at 98°; `--color-pink` muted was quiet but only 62° off, near enough to read as a
+shade of the accent. Muting the complement is both at once and needs no colour of its own.
+
+The filled dot takes it as a fill, a leaf's ring as its ring colour, and the branch circle as
+its fill. Because the complement's lightness follows the accent's, the fill lands darker than
+the page in the light theme and lighter in the dark one, so the knocked-out count is
+`--background-primary` in both (4.2:1 light, 5.8:1 dark) as on every other junction circle —
+there is no per-theme ink. An `@supports (color: oklch(from red l c h))` guard keeps a muted
+teal for engines without relative colour syntax (Chromium 119+, Safari 16.4+ have it; an old
+Android WebView may not). That guard cannot be two plain declarations: a custom property
+stores any token sequence, so an unsupported value is kept happily and only fails when it is
+substituted — too late for an earlier declaration to serve as the fallback. The bookmark rules
+are last in the file on purpose — they tie on specificity with the active-note rules and win
+by order, so a bookmarked active note keeps the bookmark colour.
+
+Obsidian's highlight colour (`--highlight-background`, which already folds in a theme's
+legacy `--text-highlight-bg`) was considered and is **not** used. It is a 30% wash made for
+sitting behind text and derives from `--color-yellow`: opaque it is just that yellow, and
+left translucent an 8px dot painted in it all but vanishes on a light background (1.25:1
+against white, measured).
 
 The far-end entries (`.folgezettel-entry.is-detached`) are set apart by
 a margin on the side facing the strand — `margin-bottom` on the one at the top,
