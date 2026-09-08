@@ -115,8 +115,9 @@
 	display: none;
 }
 
-/* Filled dot sitting on the rail: muted for sequence notes, accent for the
-   active (pivot) note. */
+/* Filled dot sitting on the rail. Every marker here is drawn in the same muted
+   `--nav-item-color`, the active note included: its row already carries the highlight,
+   so colouring its icon too would only spend the accent twice. */
 .folgezettel-dot {
 	position: absolute;
 	top: 50%;
@@ -128,33 +129,12 @@
 	transform: translate(-50%, -50%);
 }
 
-.folgezettel-entry.is-active .folgezettel-dot {
-	background-color: var(--interactive-accent);
-}
-
 /* A leaf — a note nothing continues — is drawn as an open circle: the thread really
    ends there, as against a strand the step cap merely cut short. The ring is an inset
    box-shadow, not a border, so the dot keeps the exact size the rail gap is cut for. */
 .folgezettel-entry.is-leaf .folgezettel-dot {
 	background-color: transparent;
 	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--nav-item-color);
-}
-
-.folgezettel-entry.is-active.is-leaf .folgezettel-dot {
-	background-color: transparent;
-	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--interactive-accent);
-}
-
-/* The active note carries the branch circle too when it is one of several branches
-   at its fork; it keeps the accent the dot would have had, with the count knocked
-   out in the matching on-accent colour. */
-.folgezettel-entry.is-active .folgezettel-branch-toggle {
-	background-color: var(--interactive-accent);
-	color: var(--text-on-accent);
-}
-
-.folgezettel-entry.is-active .folgezettel-branch-toggle:hover {
-	background-color: var(--interactive-accent-hover);
 }
 
 .folgezettel-title {
@@ -311,47 +291,18 @@
    of note it is while the bookmark reads at a glance. The class sits on the *row*, so one
    rule per shape covers every icon that row can end up with.
 
-   The colour is the **muted complement of the accent**, derived from it rather than picked:
-   `oklch(from var(--interactive-accent) l c calc(h + 180))` takes the accent's own lightness
-   and chroma at the opposite hue, and mixing that 60% into `--nav-item-color` — the muted
-   grey every other marker here is drawn in — takes the glare off. So it follows whatever
-   accent the theme or the reader sets, and stays the farthest hue from it by construction.
-   On the default violet (`oklch(0.60 0.22 292)`) that is an olive-gold: `#7b8226` light,
-   `#969c2e` dark.
+   The colour is the accent itself. It is the one colour in the panel that is already the
+   reader's own — set by the theme, and by them — and nothing else in the gutter uses it:
+   the active note is marked by its row highlight rather than by its icon, so the accent is
+   free to mean "bookmarked" and only that. Earlier readings tried to derive a colour of
+   their own (a muted complement of the accent, and three fixed hues before it) to stay
+   clear of an accent-coloured active dot; with that dot gone the derivation has nothing
+   left to avoid.
 
-   Two properties, two jobs: **hue carries the distance from the accent, chroma carries the
-   glare.** Getting there took three tries. `--color-yellow` sat 4° off the true complement
-   at full chroma — maximum distance and maximum vibration, which is exactly the pair that
-   glares; `--color-cyan` glared for the same reason at 98°; `--color-pink` muted was quiet
-   but only 62° off, near enough to read as a shade of the accent. Muting the complement is
-   both at once, and needs no colour of its own.
-
-   The `@supports` guard is for relative colour syntax (Chromium 119+, Safari 16.4+), which
-   every Obsidian this plugin admits has on the desktop but an old Android WebView may not:
-   the fallback keeps the muted-teal marker there rather than an invalid colour, which would
-   paint nothing at all. It cannot be written as two plain declarations — a custom property
-   holds any token sequence, so an unsupported value is stored happily and only fails when it
-   is substituted, too late for the earlier declaration to serve as a fallback.
-
-   These rules come last on purpose: they tie on specificity with the active-note rules above
-   and win by order, so a bookmarked note keeps its bookmark colour even while it is the
-   active one, where the row's own highlight already marks it.
-
-   Because the complement's lightness follows the accent's, the fill lands darker than the
-   page in the light theme and lighter in the dark one — so the count knocked out of the
-   branch circle is `--background-primary` in both, as on every other junction circle. */
+   The count knocked out of a bookmarked branch circle is `--text-on-accent`, the ink
+   Obsidian pairs with that fill in either theme. */
 .folgezettel-view {
-	--fz-bookmark-color: color-mix(in oklch, var(--color-cyan) 60%, var(--nav-item-color));
-}
-
-@supports (color: oklch(from red l c h)) {
-	.folgezettel-view {
-		--fz-bookmark-color: color-mix(
-			in oklch,
-			oklch(from var(--interactive-accent) l c calc(h + 180)) 60%,
-			var(--nav-item-color)
-		);
-	}
+	--fz-bookmark-color: var(--interactive-accent);
 }
 
 .folgezettel-entry.is-bookmarked .folgezettel-dot {
@@ -366,7 +317,7 @@
 .folgezettel-entry.is-bookmarked .folgezettel-branch-toggle,
 .folgezettel-entry.is-bookmarked .folgezettel-branch-toggle:hover {
 	background-color: var(--fz-bookmark-color);
-	color: var(--background-primary);
+	color: var(--text-on-accent);
 }
 
 .folgezettel-entry.is-bookmarked.is-root .folgezettel-branch-toggle,

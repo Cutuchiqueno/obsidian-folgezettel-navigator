@@ -10,11 +10,21 @@ plugin, see `AGENTS.md`.
 - `npm run build` — full type-check (`tsc -noEmit`) then a minified production bundle.
 - `npm version <patch|minor|major>` — bumps `manifest.json` + `versions.json` via `version-bump.mjs`.
 
-There is no test runner or linter configured. `npm run build` is the correctness gate:
-the `tsc` step runs under `strict` mode, so a green build means the types line up.
+There is no test runner or linter configured. `npm run build` type-checks under `strict`,
+so a green build means the types line up — and *only* that: `tsc` never looks at
+`styles.css`, so a change confined to it passes through no gate whatsoever.
 
-Testing is manual: copy/symlink `main.js`, `manifest.json`, and `styles.css` into a
-vault's `.obsidian/plugins/folgezettel-navigator/` and reload Obsidian.
+**Every change is verified live in the vault Obsidian currently has open, before it is
+reported as done. A green build is not a test.** Testing is manual: copy/symlink `main.js`,
+`manifest.json` and `styles.css` into that vault's
+`.obsidian/plugins/folgezettel-navigator/`, reload the plugin, and check the behaviour or
+the rendered styling itself — for a styling change, by reading the computed values off the
+live DOM rather than by eye. Restore whatever the test disturbed (the open note, the theme).
+
+*Which* vault is open, and how to drive Obsidian from outside it, differ per machine — a
+flatpak on Linux, an ordinary install on Windows — so neither belongs in this file and
+neither is written here. Read the vault from Obsidian's own config rather than assuming a
+path, and take the tooling from the environment notes for the machine you are on.
 
 ## Architecture
 
@@ -220,9 +230,11 @@ each a clear layer:
   only its colour, so the marker still answers "what kind of note is this?" while the
   bookmark reads at a glance. `renderEntry` and `renderFarEndParent` put `is-bookmarked` on
   the **row**, not the icon, so the one rule per shape covers every icon that row can end up
-  with — including the branch circle `attachBranchToggle` swaps in afterwards. The colour
-  wins over the active note's accent (see Styling), because the active row is already marked
-  by its own highlight.
+  with — including the branch circle `attachBranchToggle` swaps in afterwards. The colour is
+  `--interactive-accent`, and it is the **only** thing in the gutter that wears it: the active
+  note is marked by its row highlight alone, its icon drawn in the same muted grey as every
+  other (see Styling). Give the active note's icon the accent back and the bookmark colour has
+  to go looking for one of its own again.
 - **Rendering is otherwise full teardown.** `render()` calls `contentEl.empty()` and
   rebuilds; expand/select/navigation mutate state and call `render()` (hover preview is
   the lone exception, above). It is wired to `metadataCache` `resolved`/`changed`, and —
@@ -369,9 +381,10 @@ Non-obvious pitfall when touching the entry markup/styling:
   `.folgezettel-title:hover` explicitly overrides `color` to `--nav-item-color-hover` to
   keep it looking like a nav item, not a link.
 
-A sequence note shows a filled dot (`.folgezettel-dot`) in the gutter — `--nav-item-color`
-(the muted title gray) for sequence notes, `--interactive-accent` for the active (pivot)
-note. A **leaf** — a note nothing continues — keeps that size and colour but is drawn
+A sequence note shows a filled dot (`.folgezettel-dot`) in the gutter, drawn in
+`--nav-item-color` (the muted title gray) — the active (pivot) note included, since its row
+already carries `--nav-item-background-active` and a second mark would only spend the accent
+twice. A **leaf** — a note nothing continues — keeps that size and colour but is drawn
 hollow: `background-color: transparent` plus an inset `box-shadow` ring of
 `--fz-ring-width`, which leaves the shape exactly `--fz-icon-size` across so the rail gaps
 still line up (a border would grow the box). It applies to the active note too, and marks
@@ -413,33 +426,25 @@ would then have to out-specify its own clearing rule. With `:not(:hover)` the tw
 never overlap — inside the list only `.folgezettel-branch-option:hover` applies, and the
 background simply follows the cursor.
 
-A **bookmarked** note's icon is drawn in `--fz-bookmark-color`, the **muted complement of the
-accent** — derived from it, not picked: `oklch(from var(--interactive-accent) l c calc(h +
-180))` is the accent's own lightness and chroma at the opposite hue, and mixing that 60% into
-`--nav-item-color` (the muted grey every other marker uses) takes the glare off. So the marker
-follows whatever accent the theme or the reader sets and stays the farthest hue from it by
-construction: violet `#8a5cf5` → olive-gold `#969c2e`, red → teal, green → mauve, blue →
-ochre (all measured live).
+A **bookmarked** note's icon is drawn in `--fz-bookmark-color`, which is
+`--interactive-accent`: the filled dot takes it as a fill, a leaf's ring as its ring colour,
+and the branch circle as its fill, with the count knocked out in `--text-on-accent`, the ink
+Obsidian pairs with that fill in either theme. The accent is the reader's own colour, follows
+whatever the theme or they set, and nothing else in the gutter uses it — the active row is
+marked by its highlight, not its icon — so it means "bookmarked" and nothing else.
 
-The colour has to stay clear of the accent (which already means "the note you are on") *and*
-belong to the panel, and those answer to different properties: **hue carries the distance,
-chroma carries the glare.** Three fixed colours got there the slow way and all failed on one
-axis or the other. `--color-yellow` sits 4° off the true complement at full chroma — maximum
-distance *and* maximum vibration, which is exactly the pair that glares; `--color-cyan` glared
-the same way at 98°; `--color-pink` muted was quiet but only 62° off, near enough to read as a
-shade of the accent. Muting the complement is both at once and needs no colour of its own.
-
-The filled dot takes it as a fill, a leaf's ring as its ring colour, and the branch circle as
-its fill. Because the complement's lightness follows the accent's, the fill lands darker than
-the page in the light theme and lighter in the dark one, so the knocked-out count is
-`--background-primary` in both (4.2:1 light, 5.8:1 dark) as on every other junction circle —
-there is no per-theme ink. An `@supports (color: oklch(from red l c h))` guard keeps a muted
-teal for engines without relative colour syntax (Chromium 119+, Safari 16.4+ have it; an old
-Android WebView may not). That guard cannot be two plain declarations: a custom property
-stores any token sequence, so an unsupported value is kept happily and only fails when it is
-substituted — too late for an earlier declaration to serve as the fallback. The bookmark rules
-are last in the file on purpose — they tie on specificity with the active-note rules and win
-by order, so a bookmarked active note keeps the bookmark colour.
+It did not start there. While the active note's dot wore the accent, the bookmark needed a
+colour that stayed clear of it *and* still belonged to the panel, and those answer to
+different properties: **hue carries the distance, chroma carries the glare.** Three fixed
+colours failed on one axis or the other — `--color-yellow` sat 4° off the true complement at
+full chroma (maximum distance *and* maximum vibration, exactly the pair that glares),
+`--color-cyan` glared the same way at 98°, `--color-pink` muted was quiet but only 62° off,
+near enough to read as a shade of the accent — and the answer was to derive the colour from
+the accent instead: `oklch(from var(--interactive-accent) l c calc(h + 180))` mixed 60% into
+`--nav-item-color`, the muted complement, behind an `@supports (color: oklch(from red l c h))`
+guard for engines without relative colour syntax. All of that existed to avoid the accent.
+With the active note's icon no longer wearing it, there is nothing left to avoid, and the
+derivation, its guard and its fallback are gone with it.
 
 Obsidian's highlight colour (`--highlight-background`, which already folds in a theme's
 legacy `--text-highlight-bg`) was considered and is **not** used. It is a 30% wash made for
