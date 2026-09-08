@@ -26,6 +26,13 @@ flatpak on Linux, an ordinary install on Windows — so neither belongs in this 
 neither is written here. Read the vault from Obsidian's own config rather than assuming a
 path, and take the tooling from the environment notes for the machine you are on.
 
+## Branches
+
+Development happens on **`develop`**, and commits go there directly — no feature or topic
+branches, however tidy one would look. **`main` is for releases**: it advances when a version
+is cut, not as work lands. So commit to `develop` where you stand; do not branch off it first,
+and do not commit to `main`.
+
 ## Architecture
 
 An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar, exposes
