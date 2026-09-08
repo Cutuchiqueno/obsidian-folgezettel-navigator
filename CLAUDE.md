@@ -457,7 +457,15 @@ A junction entry uses a filled circle carrying the number of selectable branches
 `--nav-item-color` fill, with the count knocked out in `--background-primary`, and a
 `min-width` + pill radius + `white-space: nowrap` so a longer count widens the shape
 instead of wrapping inside it (it is absolutely positioned, so shrink-to-fit would
-otherwise cap its width at half the marker). When expanded, its
+otherwise cap its width at half the marker). The count itself sits in a
+`.folgezettel-branch-count` span, which exists only so the digit can be trimmed to its own
+ink (`text-box: trim-both cap alphabetic`): centring the bare text centres its *line box*,
+as tall as the font's ascent plus descent, and a digit has no descender, so the unused
+descent space lifts the number about a pixel off the circle's centre — and device-pixel
+rounding then makes that read as a bug of the topmost entry, the one row whose circle always
+falls on the same unlucky half-pixel. A bare text node is an anonymous flex item that no
+selector can reach, hence the span. Engines without `text-box` ignore the rule and keep the
+old placement. When expanded, its
 `.folgezettel-branch-options` list takes the place of the title, styled to mirror
 Obsidian's search-result preview (`.search-result-file-matches` — `--search-result-background`,
 a `box-shadow` border ring, options divided by `border-bottom`). An expanded card takes a

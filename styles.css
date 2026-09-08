@@ -193,6 +193,21 @@
 	background-color: var(--nav-item-color-hover);
 }
 
+/* The count sits in a span of its own so it can be trimmed to its own ink. Centring the
+   bare text instead centres its *line box*, which is as tall as the font's ascent plus
+   descent — and a digit has no descender, so the unused descent space pushes the number
+   about a pixel above the circle's centre. Rounding to device pixels then makes that
+   worse or better depending on where the row happens to fall, and the topmost row is the
+   one case that always lands on the same unlucky half-pixel: measured, its digit sat 1.5px
+   high while a row further down sat 0.5px high, which is why the misalignment reads as a
+   property of the first entry. `text-box` trims the box to cap height and baseline, so
+   what the flex centring centres is the digit itself. The span is what makes that
+   possible: a bare text node is an anonymous flex item, which no selector can reach.
+   Engines without `text-box` ignore the rule and keep the old, slightly high placement. */
+.folgezettel-branch-count {
+	text-box: trim-both cap alphabetic;
+}
+
 /* Expanded: the entry lists every option (chosen one first) as a card styled
    like Obsidian's search-result preview. */
 .folgezettel-branch-options {

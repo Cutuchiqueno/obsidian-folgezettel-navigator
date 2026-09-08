@@ -471,11 +471,11 @@ export class FolgezettelView extends ItemView {
 			}`,
 		});
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
-		marker.createDiv({
+		const circle = marker.createDiv({
 			cls: "folgezettel-branch-toggle",
-			text: forks ? String(options.length) : "",
 			attr: { "aria-label": forks ? `Forks into ${options.length} notes` : "Beginning of the structure" },
 		});
+		circle.createSpan({ cls: "folgezettel-branch-count", text: forks ? String(options.length) : "" });
 
 		this.renderTitleLink(row, file);
 	}
@@ -517,9 +517,9 @@ export class FolgezettelView extends ItemView {
 
 		const toggle = marker.createDiv({
 			cls: "folgezettel-branch-toggle",
-			text: String(menu.options.length),
 			attr: { "aria-label": `Show ${menu.options.length} branches` },
 		});
+		toggle.createSpan({ cls: "folgezettel-branch-count", text: String(menu.options.length) });
 		toggle.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
 			this.previewBranch = null;
