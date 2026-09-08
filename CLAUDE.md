@@ -36,7 +36,7 @@ and do not commit to `main`.
 ## Architecture
 
 An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar, exposes
-jump commands along it, and can extend it by a note. Nine source files under `src/`,
+jump commands along it, and can extend it by a note. Ten source files under `src/`,
 each a clear layer:
 
 - **`graph.ts`** — pure data layer, no DOM. `buildGraph(app, propertyName)` scans every
@@ -59,6 +59,12 @@ each a clear layer:
   `refresh()` re-renders on demand. Each render also reads `bookmarkedPaths` once (see
   `bookmarks.ts`) so entries can be marked as bookmarked, and every entry's title carries the
   vault's file context menu (`attachContextMenu`, see below).
+- **`preview.ts`** — `positionPreview(popoverEl, itemEl, viewEl)`: where the native page-preview
+  popover goes when it is opened from this panel. Pure geometry, no `App`, and the only DOM it
+  touches is the popover's own box — `view.ts` supplies the three elements and does the
+  intercepting (see "Native page preview" below). `findPane` reads the layout off the view's
+  container by Obsidian's structural classes (`.mod-right-split`, `.mod-left-split`,
+  `.workspace-tabs`), which is what decides the side.
 - **`bookmarks.ts`** — `bookmarkedPaths(app)` (the paths of every bookmarked note) and
   `onBookmarksChanged(app, cb)`, read off Obsidian's **core Bookmarks plugin**. That plugin
   is not public API — neither `app.internalPlugins` nor its instance appears in
@@ -318,6 +324,30 @@ each a clear layer:
   `hoverParent: this` (the view exposes a `hoverPopover` slot for it). This inherits the
   user's "hover to preview" / Ctrl-key setting for free — do not reimplement previews.
   Skipped on `Platform.isMobile` (a tap just opens the note).
+
+  **Its placement, though, is this panel's** — Obsidian's positioner only ever puts a popover
+  above or below its target, so a preview opened from an entry covers the entries under it,
+  which in a strand is precisely what the reader was looking at. `view.ts:placeBesidePane`
+  moves it clear of the whole pane and centres it on the hovered row: left of a right sidebar,
+  right of a left sidebar, left of the tab group in the main area. The geometry is
+  `preview.ts`; three things make the interception work.
+  - **The `hoverPopover` slot is an accessor, not a field.** A popover assigns itself there as
+    it shows (`onShow`), and that is the only moment the panel can reach the instance — the
+    `hover-link` event hands back nothing. The setter is the hook.
+  - **We replace the instance's `position`, not just its coordinates.** Obsidian positions a
+    popover more than once: at `show()`, and again from a `ResizeObserver` as the embedded note
+    loads and the box settles. Moving it once in the setter would be undone the moment the
+    content arrived. `position` is real and absent from `obsidian.d.ts`, so it is reached
+    through a structural type and only replaced where it is actually a function — otherwise the
+    native placement simply stands. Ordering is safe: Obsidian's own `position()` runs
+    immediately *before* `onShow` hands us the popover, and ours follows in the same turn, so
+    nothing is painted in between.
+  - **The row is remembered on `mouseover`, not read off the popover.** `targetEl` is another
+    undeclared internal, and the panel already knows which entry it fired for. It centres on
+    the entry row rather than the title, since that is the item the reader is pointing at and
+    what grows when a title wraps. A row that was re-rendered away while the popover was
+    opening is left to Obsidian's placement (`isConnected`), rather than anchored to a detached
+    node at the screen corner.
 - **Mobile:** the plugin is mobile-compatible (`isDesktopOnly: false`, no Node/Electron
   APIs). Everything works by tap, with a **long press** standing in for the right-click file
   menu (above); only the two desktop **hover** affordances — the branch option preview and the

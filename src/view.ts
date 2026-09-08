@@ -19,6 +19,7 @@ import { askForNewNote, pickNoteToLink } from "./authoring";
 import { bookmarkedPaths, onBookmarksChanged } from "./bookmarks";
 import { buildGraph, FolgezettelGraph } from "./graph";
 import { findLeaf, findParent } from "./navigate";
+import { positionPreview } from "./preview";
 import type FolgezettelPlugin from "./main";
 
 export const VIEW_TYPE_FOLGEZETTEL = "folgezettel-navigator-view";
@@ -84,6 +85,15 @@ interface FileManagerPrompts {
 	promptForDeletion?: (file: TFile) => unknown;
 }
 
+/**
+ * The one thing about a live popover we override: where it draws itself. `position` is real
+ * and absent from `obsidian.d.ts`, so it is reached the way `bookmarks.ts` reaches the
+ * Bookmarks plugin — a structural type, used only where it is actually there.
+ */
+interface PopoverPlacement {
+	position?: () => void;
+}
+
 /** A fork on show: the branches it opens, and the key its expanded state is stored under. */
 interface BranchMenu {
 	key: string;
@@ -91,8 +101,25 @@ interface BranchMenu {
 }
 
 export class FolgezettelView extends ItemView {
-	/** Live hover popover slot required by Obsidian's page-preview integration. */
-	hoverPopover: HoverPopover | null = null;
+	/**
+	 * Live hover popover slot required by Obsidian's page-preview integration.
+	 *
+	 * It is an accessor rather than a plain field because the popover assigns itself here as
+	 * it shows, and that assignment is the only moment this panel can reach the instance —
+	 * which is what `placeBesidePane` needs to move it off the strand.
+	 */
+	get hoverPopover(): HoverPopover | null {
+		return this.popover;
+	}
+
+	set hoverPopover(popover: HoverPopover | null) {
+		this.popover = popover;
+		if (popover) this.placeBesidePane(popover);
+	}
+
+	private popover: HoverPopover | null = null;
+	/** The entry row the pending preview belongs to; the popover is centred on it. */
+	private hoverItemEl: HTMLElement | null = null;
 
 	/** Active note the current pane state belongs to; state resets when it changes. */
 	private currentPath: string | null = null;
@@ -825,6 +852,9 @@ export class FolgezettelView extends ItemView {
 		// Page preview is a desktop hover affordance; on mobile a tap just opens the note.
 		if (Platform.isMobile) return;
 		link.addEventListener("mouseover", (event: MouseEvent) => {
+			// The popover is centred on the whole row, not on the title inside it: the row is
+			// the entry the reader is pointing at, and it is what grows when a title wraps.
+			this.hoverItemEl = link.closest<HTMLElement>(".folgezettel-entry") ?? link;
 			this.app.workspace.trigger("hover-link", {
 				event,
 				source: VIEW_TYPE_FOLGEZETTEL,
@@ -834,6 +864,29 @@ export class FolgezettelView extends ItemView {
 				sourcePath: file.path,
 			});
 		});
+	}
+
+	/**
+	 * Take the popover off the strand and put it beside the pane — see `preview.ts` for the
+	 * geometry and why the native placement will not do.
+	 *
+	 * Obsidian positions a popover more than once: at `show()`, and again from a
+	 * `ResizeObserver` as the embedded note finishes loading and the box settles. Replacing
+	 * the instance's own `position` catches every one of them, where repositioning it here
+	 * just once would be undone the moment the content arrived. The first call is Obsidian's
+	 * (it runs immediately before the popover hands itself to us); ours follows in the same
+	 * turn, so nothing is painted in between.
+	 */
+	private placeBesidePane(popover: HoverPopover): void {
+		const item = this.hoverItemEl;
+		const placement = popover as HoverPopover & PopoverPlacement;
+		// No row to centre on, or an Obsidian that no longer positions its popovers this
+		// way: leave the placement alone rather than move it somewhere arbitrary.
+		if (!item || typeof placement.position !== "function") return;
+
+		const place = () => positionPreview(popover.hoverEl, item, this.containerEl);
+		placement.position = place;
+		place();
 	}
 }
 
