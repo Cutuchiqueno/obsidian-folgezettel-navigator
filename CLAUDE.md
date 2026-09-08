@@ -60,11 +60,12 @@ each a clear layer:
   `bookmarks.ts`) so entries can be marked as bookmarked, and every entry's title carries the
   vault's file context menu (`attachContextMenu`, see below).
 - **`preview.ts`** — `positionPreview(popoverEl, itemEl, viewEl)`: where the native page-preview
-  popover goes when it is opened from this panel. Pure geometry, no `App`, and the only DOM it
-  touches is the popover's own box — `view.ts` supplies the three elements and does the
-  intercepting (see "Native page preview" below). `findPane` reads the layout off the view's
-  container by Obsidian's structural classes (`.mod-right-split`, `.mod-left-split`,
-  `.workspace-tabs`), which is what decides the side.
+  popover goes when the panel is docked in a sidebar. Pure geometry, no `App`, and the only DOM
+  it touches is the popover's own box — `view.ts` supplies the three elements and does the
+  intercepting (see "Native page preview" below). `previewSidebar` reads the dock off the view's
+  container by Obsidian's structural classes (`.mod-right-split`, `.mod-left-split`), which is
+  what decides the side, and returns `null` in the main area — the signal to leave the placement
+  to Obsidian.
 - **`bookmarks.ts`** — `bookmarkedPaths(app)` (the paths of every bookmarked note) and
   `onBookmarksChanged(app, cb)`, read off Obsidian's **core Bookmarks plugin**. That plugin
   is not public API — neither `app.internalPlugins` nor its instance appears in
@@ -325,12 +326,20 @@ each a clear layer:
   user's "hover to preview" / Ctrl-key setting for free — do not reimplement previews.
   Skipped on `Platform.isMobile` (a tap just opens the note).
 
-  **Its placement, though, is this panel's** — Obsidian's positioner only ever puts a popover
-  above or below its target, so a preview opened from an entry covers the entries under it,
-  which in a strand is precisely what the reader was looking at. `view.ts:placeBesidePane`
-  moves it clear of the whole pane and centres it on the hovered row: left of a right sidebar,
-  right of a left sidebar, left of the tab group in the main area. The geometry is
-  `preview.ts`; three things make the interception work.
+  **Docked in a sidebar, its placement is this panel's** — Obsidian's positioner only ever puts
+  a popover above or below its target, so a preview opened from an entry covers the entries
+  under it, which in a strand is precisely what the reader was looking at.
+  `view.ts:placeBesidePane` moves it clear of the whole sidebar and centres it on the hovered
+  row: left of a right sidebar, right of a left sidebar. The geometry is `preview.ts`; three
+  things make the interception work.
+
+  **In the main area it is not.** A tab group has no fixed place — it can be anywhere, split
+  however the reader likes, and as wide as the window — so there is no "beside" that is
+  reliably free, and moving the preview out of a pane that fills the window only puts it over
+  the editor instead. So `placeBesidePane` returns before replacing anything, and the whole
+  native behaviour stands. Note what that rules out: replacing `position` with a no-op and
+  letting the first placement lie. Obsidian's later calls are how it follows its own content as
+  the embed loads, and swallowing them would strand the preview where the empty box started.
   - **The `hoverPopover` slot is an accessor, not a field.** A popover assigns itself there as
     it shows (`onShow`), and that is the only moment the panel can reach the instance — the
     `hover-link` event hands back nothing. The setter is the hook.

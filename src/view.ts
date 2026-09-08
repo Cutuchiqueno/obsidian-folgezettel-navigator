@@ -19,7 +19,7 @@ import { askForNewNote, pickNoteToLink } from "./authoring";
 import { bookmarkedPaths, onBookmarksChanged } from "./bookmarks";
 import { buildGraph, FolgezettelGraph } from "./graph";
 import { findLeaf, findParent } from "./navigate";
-import { positionPreview } from "./preview";
+import { positionPreview, previewSidebar } from "./preview";
 import type FolgezettelPlugin from "./main";
 
 export const VIEW_TYPE_FOLGEZETTEL = "folgezettel-navigator-view";
@@ -867,8 +867,8 @@ export class FolgezettelView extends ItemView {
 	}
 
 	/**
-	 * Take the popover off the strand and put it beside the pane — see `preview.ts` for the
-	 * geometry and why the native placement will not do.
+	 * Take the popover off the strand and put it beside the sidebar — see `preview.ts` for
+	 * the geometry, and for why only a sidebar gets this treatment.
 	 *
 	 * Obsidian positions a popover more than once: at `show()`, and again from a
 	 * `ResizeObserver` as the embedded note finishes loading and the box settles. Replacing
@@ -876,13 +876,18 @@ export class FolgezettelView extends ItemView {
 	 * just once would be undone the moment the content arrived. The first call is Obsidian's
 	 * (it runs immediately before the popover hands itself to us); ours follows in the same
 	 * turn, so nothing is painted in between.
+	 *
+	 * Where we do not place the popover ourselves, `position` is left alone rather than
+	 * replaced by a no-op: those later calls are Obsidian's way of following its own content,
+	 * and swallowing them would leave the preview stranded where the empty box happened to
+	 * start.
 	 */
 	private placeBesidePane(popover: HoverPopover): void {
 		const item = this.hoverItemEl;
 		const placement = popover as HoverPopover & PopoverPlacement;
-		// No row to centre on, or an Obsidian that no longer positions its popovers this
-		// way: leave the placement alone rather than move it somewhere arbitrary.
-		if (!item || typeof placement.position !== "function") return;
+		// Not in a sidebar (the placement is Obsidian's there), no row to centre on, or an
+		// Obsidian that no longer positions its popovers this way: leave it be.
+		if (!item || !previewSidebar(this.containerEl) || typeof placement.position !== "function") return;
 
 		const place = () => positionPreview(popover.hoverEl, item, this.containerEl);
 		placement.position = place;
