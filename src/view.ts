@@ -14,8 +14,9 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { HoverPopover, ItemView, Menu, Platform, TFile, WorkspaceLeaf } from "obsidian";
+import { HoverPopover, ItemView, Menu, Platform, setIcon, TFile, WorkspaceLeaf } from "obsidian";
 import { askForNewNote, pickNoteToLink } from "./authoring";
+import { bodyBacklinks } from "./backlinks";
 import { bookmarkedPaths, onBookmarksChanged } from "./bookmarks";
 import { buildGraph, FolgezettelGraph } from "./graph";
 import { findLeaf, findParent } from "./navigate";
@@ -26,6 +27,13 @@ export const VIEW_TYPE_FOLGEZETTEL = "folgezettel-navigator-view";
 
 /** Safety bound on strand-walk iterations (cycles are already guarded by `visited`). */
 const MAX_ITERATIONS = 100;
+
+/**
+ * The gutter symbol of the backlinks section: Obsidian's own Backlinks pane icon, so the
+ * section names itself with the mark the reader already knows it by. It is the id that pane's
+ * view returns from `getIcon()`, not a lookalike picked out of Lucide.
+ */
+const BACKLINK_ICON = "links-coming-in";
 
 /** How long a finger must rest on an entry before it counts as a long press. */
 const LONG_PRESS_MS = 500;
@@ -251,7 +259,10 @@ export class FolgezettelView extends ItemView {
 		this.bookmarks = bookmarkedPaths(this.app);
 		this.branchContinuations.clear();
 
-		const list = el.createDiv({ cls: "folgezettel-list" });
+		// Both sections scroll as one: the backlinks follow the strand rather than sitting in
+		// a pane of their own, so the panel reads as a single column top to bottom.
+		const scroll = el.createDiv({ cls: "folgezettel-scroll" });
+		const list = scroll.createDiv({ cls: "folgezettel-list" });
 
 		// One strand, anchored at the **top** of the panel and read straight down: where
 		// the branch was started, the ancestors, the active note, its continuations, where
@@ -263,6 +274,8 @@ export class FolgezettelView extends ItemView {
 
 		this.renderStartOfBranch(list, note, visited);
 		this.renderChain(list, ancestors, ancestors.length - 1, note, visited, maxSteps);
+
+		this.renderBacklinks(scroll, note);
 	}
 
 	/**
@@ -616,6 +629,47 @@ export class FolgezettelView extends ItemView {
 
 		this.renderTitleLink(row, file);
 		return marker;
+	}
+
+	/**
+	 * The second section: the notes whose *body* links to the shown one — the ordinary links a
+	 * note collects in its prose, as against the frontmatter property the strand is built from.
+	 * The two are disjoint by construction (see `backlinks.ts`), so a note appears here only
+	 * for a reference the strand does not already draw.
+	 *
+	 * Nothing links here → nothing is drawn, the rule included: the panel then looks exactly as
+	 * it did before this section existed, rather than carrying an empty heading around.
+	 */
+	private renderBacklinks(parent: HTMLElement, note: TFile): void {
+		const sources = bodyBacklinks(this.app, note);
+		if (sources.length === 0) return;
+
+		parent.createDiv({ cls: "folgezettel-divider" });
+		const section = parent.createDiv({ cls: "folgezettel-backlinks" });
+		for (const source of sources) this.renderBacklinkEntry(section, source);
+	}
+
+	/**
+	 * A note linking here. The same row as the strand's — and the same `folgezettel-entry`
+	 * class, which is load-bearing twice over: the page preview centres itself on the nearest
+	 * such element (`attachHoverPreview`), and the bookmark colour is scoped to it.
+	 *
+	 * What differs is the gutter. There is no rail (CSS), because these notes are not threaded
+	 * on anything — they are a set, not a sequence — and no dot, because a dot here would claim
+	 * a place in the strand that this note does not have. The Backlinks pane's icon says which
+	 * relation the row stands for instead. It deliberately does not go through `renderEntry`:
+	 * that method is about the strand (the leaf lookup, the entry kind, the dot a fork later
+	 * trades away), none of which means anything in a list with no strand in it.
+	 */
+	private renderBacklinkEntry(parent: HTMLElement, file: TFile): void {
+		const row = parent.createDiv({
+			cls: `folgezettel-entry is-backlink${this.isBookmarked(file) ? " is-bookmarked" : ""}`,
+		});
+
+		const marker = row.createDiv({ cls: "folgezettel-marker" });
+		setIcon(marker.createSpan({ cls: "folgezettel-backlink-icon" }), BACKLINK_ICON);
+
+		this.renderTitleLink(row, file);
 	}
 
 	/**

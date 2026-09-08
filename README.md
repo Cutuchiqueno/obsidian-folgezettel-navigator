@@ -79,8 +79,8 @@ anyway. The number lets you size up a fork without opening it, and the open circ
 thread that genuinely ends distinct from one the panel merely cut short at its limit.
 
 Switch to another note and the panel redraws around it. By default it shows up to five
-notes on each side (configurable — see [Settings](#settings)). If the pane is too short
-for the sequence it scrolls; otherwise there is no scrollbar.
+notes on each side (configurable — see [Settings](#settings)). If the pane is too short for
+what it draws, the whole panel scrolls as one; otherwise there is no scrollbar.
 
 When the thread runs on past that limit, the panel still shows you where it goes: one
 extra entry appears **above** the sequence for the note the current branch was started
@@ -91,6 +91,20 @@ numbered circle when the note it names is a fork, and an open circle of that siz
 thread simply starts there — the same open shape the note at the other end gets, so both
 ends of the thread look alike; both are markers only — there is nothing to click. Either
 entry is left out when it is already on screen.
+
+## What else links here
+
+Under the sequence, after a small centred rule, the panel lists the notes that link to the
+one you are on **in their text** — the ordinary links and embeds you write in prose, as
+opposed to the `folgezettel` property that makes the sequence. The two never overlap: a note
+that only continues the thread stays in the sequence above, and a note that mentions this one
+in passing appears here, marked with Obsidian's backlinks icon. They are a set rather than a
+thread, so there is no guide rail running through them.
+
+These entries behave exactly like the ones above: click to open (Ctrl/Cmd-click for a new
+tab), hover for the page preview, right-click (or long-press on touch) for the file menu, and
+a bookmarked note shows its icon in the bookmark colour. When nothing links to the note, the
+section — the rule with it — is simply not there.
 
 ## Junctions (branches)
 

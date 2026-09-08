@@ -36,8 +36,9 @@ and do not commit to `main`.
 ## Architecture
 
 An Obsidian plugin that renders a Luhmann Folgezettel sequence in a sidebar, exposes
-jump commands along it, and can extend it by a note. Ten source files under `src/`,
-each a clear layer:
+jump commands along it, and can extend it by a note. Under the sequence it lists the notes
+that link to the shown one in their **body** — the same panel's second answer, and a
+disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clear layer:
 
 - **`graph.ts`** — pure data layer, no DOM. `buildGraph(app, propertyName)` scans every
   markdown file's configured Folgezettel frontmatter property (default `folgezettel`,
@@ -56,6 +57,8 @@ each a clear layer:
   the continuations. At a card, everything below moves into a continuation container
   (`branchContinuations`) that a hover preview rebuilds in place (see below).
   `renderStartOfBranch` and `renderEndOfBranch` add the detached entries at the two ends.
+  Below all of that, `renderBacklinks` draws the second section (see `backlinks.ts`) into the
+  same scroll container, so the two lists scroll as one column.
   `refresh()` re-renders on demand. Each render also reads `bookmarkedPaths` once (see
   `bookmarks.ts`) so entries can be marked as bookmarked, and every entry's title carries the
   vault's file context menu (`attachContextMenu`, see below).
@@ -66,6 +69,16 @@ each a clear layer:
   container by Obsidian's structural classes (`.mod-right-split`, `.mod-left-split`), which is
   what decides the side, and returns `null` in the main area — the signal to leave the placement
   to Obsidian.
+- **`backlinks.ts`** — `bodyBacklinks(app, file)`: the notes whose **body** links to (or
+  embeds) `file`, in vault scan order. Pure data layer like `graph.ts`, and rebuilt per render
+  for the same reason. "Not in the frontmatter" is not a filter but *where it reads*: the
+  metadata cache keeps body references in `links`/`embeds` and frontmatter ones in
+  `frontmatterLinks`, so reading only the first two **is** the rule — nothing to compare
+  positions against, and nothing to drift if Obsidian changes how a property stores a link.
+  That also makes this list disjoint from the strand by construction, which is the point: the
+  strand is the frontmatter relation, this is everything else. Neither
+  `metadataCache.resolvedLinks` (it counts both kinds together) nor `getBacklinksForFile`
+  (undeclared) can answer the question.
 - **`bookmarks.ts`** — `bookmarkedPaths(app)` (the paths of every bookmarked note) and
   `onBookmarksChanged(app, cb)`, read off Obsidian's **core Bookmarks plugin**. That plugin
   is not public API — neither `app.internalPlugins` nor its instance appears in
@@ -130,11 +143,12 @@ each a clear layer:
   A's `folgezettel`). So `incoming` renders *above* the active note and `outgoing`
   renders *below* it. Do not flip these without also flipping the render order in
   `view.ts`.
-- **The list hangs from the top of the panel.** One flex column, packed at the top, and
-  scrollable (`overflow-y: auto`) so a strand taller than the pane can still be reached —
-  the bar appears only when it is needed. The active note is *not* pinned to a fixed
-  height — it sits below however many ancestors there are, and moves as the reader
-  navigates.
+- **The list hangs from the top of the panel.** One flex column, packed at the top, inside
+  the scroll container `.folgezettel-scroll` (`overflow-y: auto`) that also holds the
+  backlinks section, so a panel taller than the pane can still be read through — the bar
+  appears only when it is needed, and there is only ever **one** of them. The active note is
+  *not* pinned to a fixed height — it sits below however many ancestors there are, and moves
+  as the reader navigates.
 
   The scroll container carries `scrollbar-gutter: stable` and it must keep it: near the
   overflow threshold a preview changes the strand's height, and a bar that appeared and
@@ -249,6 +263,17 @@ each a clear layer:
   note is marked by its row highlight alone, its icon drawn in the same muted grey as every
   other (see Styling). Give the active note's icon the accent back and the bookmark colour has
   to go looking for one of its own again.
+- **The second section is a set, not a sequence — and it disappears when empty.** The
+  backlinks below the strand are the notes that mention this one in prose: unordered (vault
+  scan order, no reading direction to honour), unthreaded (no rail, because nothing threads
+  them), and marked with the Backlinks pane's own icon rather than a dot, which would claim a
+  place in the strand they do not have. `renderBacklinks` returns before drawing anything when
+  there are none — the rule included — so a note nothing links to leaves the panel looking
+  exactly as it did before the section existed; an empty heading would cost every such note a
+  line to say nothing. Rows are otherwise ordinary entries and go through `renderTitleLink`
+  like every other, which is what gives them the preview, the menu and the bookmark colour for
+  free. They keep the `folgezettel-entry` class for two concrete reasons: the page preview
+  centres on `closest(".folgezettel-entry")`, and the bookmark rules are scoped to it.
 - **Rendering is otherwise full teardown.** `render()` calls `contentEl.empty()` and
   rebuilds; expand/select/navigation mutate state and call `render()` (hover preview is
   the lone exception, above). It is wired to `metadataCache` `resolved`/`changed`, and —
@@ -320,7 +345,15 @@ each a clear layer:
 
 - **Link resolution:** `metadataCache.getFirstLinkpathDest(linkpath, sourcePath)`.
   `graph.ts:toLinkpath` normalizes raw frontmatter values, tolerating both
-  `"[[Wikilink]]"` and bare `Note` forms and stripping `#heading`/`|alias`.
+  `"[[Wikilink]]"` and bare `Note` forms and stripping `#heading`/`|alias`. Body references
+  arrive already parsed, so `backlinks.ts` only puts them through the public `getLinkpath` to
+  drop a subpath; an alias never reaches `ref.link` (that is `displayText`).
+- **Body vs. frontmatter references:** `CachedMetadata` splits them — `links` and `embeds`
+  against `frontmatterLinks` — which is what lets the two sections of the panel read the same
+  cache and never overlap (see `backlinks.ts`).
+- **The Backlinks pane's icon:** `setIcon(el, "links-coming-in")`, the id that view returns
+  from `getIcon()`. It is Obsidian's own registered icon, not a Lucide lookalike, so the
+  section is marked with the symbol the reader already associates with the relation.
 - **Native page preview:** entries trigger the `hover-link` workspace event with
   `hoverParent: this` (the view exposes a `hoverPopover` slot for it). This inherits the
   user's "hover to preview" / Ctrl-key setting for free — do not reimplement previews.
@@ -519,10 +552,23 @@ rings it like a leaf, so the thread's two ends match; its rule is repeated under
 to outrank the `.is-detached` hover fill above it.
 
 `.folgezettel-list` is a single flex column with `justify-content: flex-start`, so the
-strand hangs from the panel's top edge; `overflow-y: auto` plus `scrollbar-gutter: stable`
-scrolls it when the pane is too short without letting the bar's arrival resize the content
-(see "The list hangs from the top of the panel"). Entries carry `is-incoming` /
+strand hangs from the panel's top edge. The scrolling is one level up, on
+`.folgezettel-scroll`, which holds the strand, the divider and the backlinks section:
+`overflow-y: auto` plus `scrollbar-gutter: stable` scrolls the panel as one column when the
+pane is too short, without letting the bar's arrival resize the content (see "The list hangs
+from the top of the panel"). Entries carry `is-incoming` /
 `is-active` / `is-outgoing` for styling only — there is no longer a container per side.
 Everything below a card is wrapped in a `.folgezettel-continuation` element set to
 `display: contents` (layout-transparent), so a hover preview can rebuild just that subtree
 without perturbing the strand's flex layout.
+
+The backlinks section is separated by `.folgezettel-divider`: a rule `2em` wide, centred with
+`margin: var(--size-4-4) auto`, at `--border-width` in `--hr-color` — the colour every border
+and `<hr>` in the app resolves to. Its `em` is the panel's own `--font-ui-small`, set on the
+element, so the ornament keeps its measure against the text it divides rather than against a
+root font it never uses; short and centred, it reads as a break between two lists rather than
+as the frame of a second panel. Rows there are ordinary `.folgezettel-entry` elements with
+`is-backlink`, which hides both `.folgezettel-marker` rail segments, and their gutter carries
+`.folgezettel-backlink-icon` — Obsidian's Backlinks icon at `--icon-xs` (14px, the branch
+circle's slot) in `--nav-item-color`, taking `--fz-bookmark-color` when the row is bookmarked
+like every other icon in the gutter.

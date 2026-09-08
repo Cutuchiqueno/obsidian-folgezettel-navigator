@@ -22,29 +22,37 @@
 	padding: var(--size-4-4) var(--size-4-2);
 }
 
-/* One strand, hung from the top of the panel and read straight down. Anchoring here
-   rather than on a centred active note is what makes every row's position depend only on
-   what is *above* it — so a card can own everything below it and a hover preview can
-   replace all of it, the active note included, without the card ever moving under the
-   cursor.
+/* Everything the panel draws — the strand and the backlinks section under it — scrolls as
+   one column, so the second section follows the first instead of sitting in a pane of its own.
 
-   `overflow-y: auto` scrolls only when the pane is too short for the strand; there is no
+   `overflow-y: auto` scrolls only when the pane is too short for the content; there is no
    bar otherwise. `scrollbar-gutter: stable` is what keeps that honest: near the overflow
    threshold a hover preview changes the strand's height, and without a reserved gutter the
    bar would appear and vanish with it, changing the content width, rewrapping titles and
    sliding the card out from under the cursor — the very thrash the top anchoring exists to
    prevent. The gutter is not extra width: the pane's right padding is taken off above in
    favour of it, so the reserved strip *is* that padding and the bar simply lands in it. */
-.folgezettel-list {
+.folgezettel-scroll {
 	flex: 1 1 auto;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	align-items: stretch;
-	justify-content: flex-start;
 	overflow-y: auto;
 	overflow-x: hidden;
 	scrollbar-gutter: stable;
+}
+
+/* One strand, hung from the top of the panel and read straight down. Anchoring here
+   rather than on a centred active note is what makes every row's position depend only on
+   what is *above* it — so a card can own everything below it and a hover preview can
+   replace all of it, the active note included, without the card ever moving under the
+   cursor. */
+.folgezettel-list {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: flex-start;
 }
 
 /* Layout-transparent wrapper: everything below a card lives here so hover previews
@@ -301,6 +309,50 @@
 	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--nav-item-color);
 }
 
+/*
+ * The backlinks section: the notes whose body links to the shown one, below the strand.
+ *
+ * The break between the two is a short centred rule, a fleuron's width rather than the pane's,
+ * so it reads as an ornament dividing two lists and not as the frame of a new panel. Its
+ * colour and weight are Obsidian's own — `--hr-color`, the token every border resolves to as
+ * well, at `--border-width`. `em` is relative to `--font-ui-small` set here, so the rule keeps
+ * its measure against the text it separates rather than against a root font it never uses.
+ */
+.folgezettel-divider {
+	flex: 0 0 auto;
+	width: 2em;
+	margin: var(--size-4-4) auto;
+	border-top: var(--border-width) solid var(--hr-color);
+	font-size: var(--font-ui-small);
+}
+
+.folgezettel-backlinks {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+}
+
+/* No guide rail: these notes are a set, not a sequence — nothing threads them onto one
+   another, so there is no line for them to hang from. */
+.folgezettel-entry.is-backlink .folgezettel-marker::before,
+.folgezettel-entry.is-backlink .folgezettel-marker::after {
+	display: none;
+}
+
+/* Obsidian's Backlinks icon in the gutter slot, drawn at the branch circle's size and in the
+   same muted `--nav-item-color` every other marker uses, so the two lists read as one panel. */
+.folgezettel-backlink-icon {
+	--icon-size: var(--icon-xs);
+	--icon-stroke: var(--icon-xs-stroke-width);
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	display: flex;
+	color: var(--nav-item-color);
+	transform: translate(-50%, -50%);
+}
+
 /* A bookmarked note keeps whatever icon its role calls for — dot, open ring, or the
    numbered branch circle — and changes only its colour, so the marker still says what kind
    of note it is while the bookmark reads at a glance. The class sits on the *row*, so one
@@ -315,7 +367,8 @@
    left to avoid.
 
    The count knocked out of a bookmarked branch circle is `--text-on-accent`, the ink
-   Obsidian pairs with that fill in either theme. */
+   Obsidian pairs with that fill in either theme; the backlinks icon takes the colour as its
+   stroke, since that is what `currentColor` draws it in. */
 .folgezettel-view {
 	--fz-bookmark-color: var(--interactive-accent);
 }
@@ -339,6 +392,10 @@
 .folgezettel-entry.is-bookmarked.is-root .folgezettel-branch-toggle:hover {
 	background-color: transparent;
 	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--fz-bookmark-color);
+}
+
+.folgezettel-entry.is-bookmarked .folgezettel-backlink-icon {
+	color: var(--fz-bookmark-color);
 }
 
 /*
