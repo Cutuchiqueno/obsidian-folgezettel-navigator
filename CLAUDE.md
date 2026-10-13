@@ -8,11 +8,20 @@ plugin, see `AGENTS.md`.
 
 - `npm run dev` — esbuild in watch mode; rebuilds `main.js` on every source change.
 - `npm run build` — full type-check (`tsc -noEmit`) then a minified production bundle.
+- `npm run lint` — ESLint with Obsidian's own plugin rule set, `eslint-plugin-obsidianmd`.
 - `npm version <patch|minor|major>` — bumps `manifest.json` + `versions.json` via `version-bump.mjs`.
 
-There is no test runner or linter configured. `npm run build` type-checks under `strict`,
-so a green build means the types line up — and *only* that: `tsc` never looks at
-`styles.css`, so a change confined to it passes through no gate whatsoever.
+**`npm run lint` passes before every commit.** It runs the `recommended` config of
+`eslint-plugin-obsidianmd` — the guidelines Obsidian's review applies to a community
+plugin, with typescript-eslint's type-checked rules underneath — and `eslint.config.mjs`
+departs from it in two places only: the sentence-case rule leaves "Folgezettel" capitalised,
+and the two build scripts are declared Node scripts, since the mobile-safety rules are about
+code that runs inside Obsidian. Fix a finding rather than silencing it, and add a departure
+there, with its reason, only where a rule misreads this plugin.
+
+There is no test runner. `npm run build` type-checks under `strict`,
+so a green build means the types line up — and *only* that: neither `tsc` nor the linter
+looks at `styles.css`, so a change confined to it passes through no gate whatsoever.
 
 **Every change is verified live in the vault Obsidian currently has open, before it is
 reported as done. A green build is not a test.** Testing is manual: copy/symlink `main.js`,
