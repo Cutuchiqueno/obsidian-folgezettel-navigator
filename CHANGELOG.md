@@ -3,10 +3,11 @@
 All notable changes to Folgezettel Navigator are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] — 2026-09-08
+## [1.2.0] — 2026-10-13
 
 The panel stops being read-only. You can now grow a sequence from it, act on any note in it
-without leaving the pane, and see at a glance which notes you have bookmarked.
+without leaving the pane, see at a glance which notes you have bookmarked, and see what else
+links to the note you are on.
 
 ### Added
 
@@ -36,11 +37,17 @@ So you can grow a branch anywhere in the sequence on show without navigating the
 
 **Bookmarked notes stand out on the rail.** A note you have bookmarked keeps whatever marker
 it would have — dot, numbered branch circle, or an open circle at either end of the thread —
-and draws it in the muted complement of your accent colour: olive-gold against Obsidian's
-default violet, and it follows the accent if you change it. So your bookmarks are visible
-along the sequence without hiding what kind of note each one is. It reads Obsidian's core
-Bookmarks plugin, groups included, and updates as you bookmark and unbookmark. With that
-plugin turned off, nothing changes.
+and draws it in your accent colour, which nothing else on the rail uses any more. So your
+bookmarks are visible along the sequence without hiding what kind of note each one is. It
+reads Obsidian's core Bookmarks plugin, groups included, and updates as you bookmark and
+unbookmark. With that plugin turned off, nothing changes.
+
+**See what else links here.** Under the sequence, after a short rule, the panel lists the
+notes that link to the one you are on in their text — ordinary links and embeds, as opposed
+to the Folgezettel property that makes the sequence. The two lists never overlap. The
+entries open, preview and right-click like every other entry, and are marked with
+Obsidian's backlinks icon; there is no guide rail through them, since they are not a
+thread. When nothing links to the note, the section is not there at all.
 
 **New note location setting.** Which folder *Create following note* creates notes in,
 with folder autocompletion as Obsidian's own path settings have. Left empty — the
@@ -50,6 +57,32 @@ exist yet is created.
 **The settings are searchable.** All three are declared to Obsidian (1.13 and later), so
 they turn up in the search at the top of the settings window instead of only on the
 plugin's own tab. On older versions the tab renders as before.
+
+### Changed
+
+- **The page preview opens beside the sidebar, not over the sequence.** Hovering a title
+  used to open Obsidian's preview right below or above it, covering the very notes you were
+  reading along. With the panel in a sidebar, the preview now opens next to the sidebar,
+  level with the note you are pointing at. With the panel in a tab, Obsidian places it as
+  usual — a tab has no edge the preview could reliably go beside.
+- **The note you are on is marked by its highlighted row alone.** Its marker is now drawn
+  in the same grey as every other, which leaves the accent colour to bookmarks.
+- **An open branch menu keeps the order of the Folgezettel property.** It used to move the
+  branch you are on to the top, so the order changed after every pick and no longer showed
+  which branch continues the thread. That branch is now highlighted where it stands.
+- **The beginning of a structure is drawn as an open circle wherever it branches.** A
+  first note that forks used to look like any other fork; it now keeps its number inside an
+  open circle — at the top of the panel, further up the sequence, and when you are on it —
+  so the two ends of a thread still match.
+
+### Fixed
+
+- **Your branch choices survive a switch to another tab.** Picking branches in the panel,
+  switching to a tab with another note and coming back used to reset the panel to first
+  links. It now keeps the branches you picked, and any branch menus you left open, for as
+  long as the note stays open in a tab; closing it lets them go.
+- **The number in a branch circle sits in its centre.** It used to sit about a pixel high,
+  most visibly on the topmost entry.
 
 ## [1.1.0] — 2026-09-02
 

@@ -63,20 +63,19 @@ The marker on that rail tells you what kind of note each entry is:
 | Filled dot | A note in the sequence |
 | Filled circle with a number | A note that branches, and how many branches it has |
 | Small open circle | A note nothing continues — the end of the thread |
-| Large open circle | The beginning of the structure |
+| Large open circle | The beginning of the structure — with a number in it when it branches |
 
-A **bookmarked** note keeps the marker its role calls for and draws it in the muted
-complement of your accent colour instead — olive-gold against Obsidian's default violet —
-so you can see at a glance where your bookmarks sit along the thread without losing what
-kind of note each one is. It follows Obsidian's core Bookmarks plugin (bookmarks inside
-groups included) and updates as you bookmark and unbookmark. A bookmark pointing at a
-*heading* inside a note does not count, matching Obsidian's own reading of which notes are
-bookmarked; with the Bookmarks plugin turned off, nothing changes.
+The number lets you size up a fork without opening it, and the open circles keep a thread
+that genuinely ends distinct from one the panel merely cut short at its limit. The note you
+are on is marked by its highlighted row; its marker is drawn like any other.
 
-Whichever marker it has, the note you are on is drawn in the accent colour — unless it is
-bookmarked, in which case the bookmark colour wins, since the row it sits on is highlighted
-anyway. The number lets you size up a fork without opening it, and the open circles keep a
-thread that genuinely ends distinct from one the panel merely cut short at its limit.
+A **bookmarked** note keeps the marker its role calls for and draws it in your accent
+colour instead — the one thing on the rail that uses it — so you can see at a glance where
+your bookmarks sit along the thread without losing what kind of note each one is. It
+follows Obsidian's core Bookmarks plugin (bookmarks inside groups included) and updates as
+you bookmark and unbookmark. A bookmark pointing at a *heading* inside a note does not
+count, matching Obsidian's own reading of which notes are bookmarked; with the Bookmarks
+plugin turned off, nothing changes.
 
 Switch to another note and the panel redraws around it. By default it shows up to five
 notes on each side (configurable — see [Settings](#settings)). If the pane is too short for
@@ -89,7 +88,8 @@ with no guide rail running to them, because they are not the next note along —
 the two ends of the branch you are in the middle of. The one above wears the junction's
 numbered circle when the note it names is a fork, and an open circle of that size when the
 thread simply starts there — the same open shape the note at the other end gets, so both
-ends of the thread look alike; both are markers only — there is nothing to click. Either
+ends of the thread look alike. Where the thread starts *and* forks right away, the circle is
+open and carries the number. Both are markers only — there is nothing to click. Either
 entry is left out when it is already on screen.
 
 ## What else links here
@@ -119,9 +119,10 @@ note's `folgezettel` property — the branch that continues the thread (see
 To explore the alternatives:
 
 1. **Click the numbered circle.** The row *below* it — the one that starts the current
-   branch — turns into a card listing every option, your current choice first and already
-   highlighted, styled like Obsidian's search-result previews. That row drops its marker while
-   the card is open, since it now stands for a choice rather than for one note.
+   branch — turns into a card listing every option in the order the `folgezettel` property
+   gives them, your current choice highlighted where it stands, styled like Obsidian's
+   search-result previews. That row drops its marker while the card is open, since it now
+   stands for a choice rather than for one note.
 2. **Hover an option** *(desktop)* to see where that branch leads, without committing to
    it. Move the pointer away and the sequence comes straight back.
 3. **Click an option** to take it. Below the active note the sequence re-roots along your
@@ -137,8 +138,10 @@ looking away from. And picking an option there **opens** that note rather than r
 the sequence: everything between a fork and the note you are on is the path that got you
 there, so the only way to switch to a sibling branch is to go to it.
 
-Your branch choices are remembered while you stay on the note and reset when you move to
-a different one — at which point the panel is back to following first links.
+Your branch choices — and any cards you left open — are remembered for as long as the note
+stays open in a tab, so you can switch to another tab and come back to the sequence as you
+left it. Close the note, or open another note in its tab, and they are let go: the next
+time, the panel is back to following first links.
 
 ## Jumping without the panel
 
@@ -175,7 +178,7 @@ nothing links to.
 
 The panel uses the same rule, so a jump and the drawn sequence agree on where the branch
 runs — unless you have picked a different option in a junction card, which steers the
-panel for as long as you stay on that note.
+panel for as long as that note stays open.
 
 ## Extending the sequence
 
@@ -211,7 +214,7 @@ the sequence without navigating to it first.
 | --- | --- |
 | **Click** a note title | Opens the note; the panel redraws around it |
 | **Right-click** a note title *(long press on mobile)* | That note's menu: open it elsewhere, create or link a following note, rename, move, bookmark, delete, reveal |
-| **Hover** a title *(desktop)* | Obsidian's native page preview, following your Page preview setting |
+| **Hover** a title *(desktop)* | Obsidian's native page preview, following your Page preview setting — beside the sidebar, so it does not cover the sequence |
 | **Click** a junction's numbered circle | Expand / collapse the list of its branches, on the row below |
 | **Hover** a branch option *(desktop)* | Preview that branch, without committing to it |
 | **Click** a branch option *below* the active note | Take that branch (does **not** open the note) |
@@ -267,6 +270,7 @@ Settings → Community plugins.
 npm install    # install dependencies
 npm run dev    # watch + rebuild main.js on change
 npm run build  # type-check and produce a production bundle
+npm run lint   # check against Obsidian's plugin guidelines (eslint-plugin-obsidianmd)
 ```
 
 ## License
