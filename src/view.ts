@@ -108,6 +108,14 @@ interface BranchMenu {
 	options: TFile[];
 }
 
+/** What the reader has done to one note's strand, kept per note — see `branchStates`. */
+interface BranchState {
+	/** Junction keys whose option list is expanded. */
+	expanded: Set<string>;
+	/** Junction key -> chosen option path (overrides the first-link default). */
+	selections: Map<string, string>;
+}
+
 export class FolgezettelView extends ItemView {
 	/**
 	 * Live hover popover slot required by Obsidian's page-preview integration.
@@ -129,12 +137,16 @@ export class FolgezettelView extends ItemView {
 	/** The entry row the pending preview belongs to; the popover is centred on it. */
 	private hoverItemEl: HTMLElement | null = null;
 
-	/** Active note the current pane state belongs to; state resets when it changes. */
+	/** Active note the panel is drawn for; `branches` is that note's entry in `branchStates`. */
 	private currentPath: string | null = null;
-	/** Junction keys whose option list is expanded. */
-	private expandedBranches = new Set<string>();
-	/** Junction key -> chosen option path (overrides the first-link default). */
-	private branchSelections = new Map<string, string>();
+	/**
+	 * Note path -> its branch state, for every note still open in a tab. Switching to another
+	 * tab and back therefore finds a strand as the reader left it; the state goes when the
+	 * note's last tab does (`pruneBranchStates`).
+	 */
+	private branchStates = new Map<string, BranchState>();
+	/** The branch state of the note on show. */
+	private branches: BranchState = { expanded: new Set(), selections: new Map() };
 	/**
 	 * Transient hover preview: while the mouse is over an option in an expanded
 	 * branch card, the strand continues from that option instead of the stored
@@ -209,6 +221,9 @@ export class FolgezettelView extends ItemView {
 		};
 		this.registerEvent(this.app.workspace.on("active-leaf-change", renderIfNoteChanged));
 		this.registerEvent(this.app.workspace.on("file-open", renderIfNoteChanged));
+		// Closing a tab changes no active note when it was in the background, so let the
+		// branch state of a note that has just lost its last tab go here.
+		this.registerEvent(this.app.workspace.on("layout-change", () => this.pruneBranchStates()));
 		// Vault link changes can alter the sequence for the current note.
 		this.registerEvent(this.app.metadataCache.on("resolved", () => this.render()));
 		this.registerEvent(this.app.metadataCache.on("changed", () => this.render()));
@@ -232,6 +247,35 @@ export class FolgezettelView extends ItemView {
 		return file && file.extension === "md" ? file.path : null;
 	}
 
+	/** The branch state stored for `path`, started empty the first time the note is shown. */
+	private branchStateFor(path: string): BranchState {
+		let state = this.branchStates.get(path);
+		if (!state) {
+			state = { expanded: new Set(), selections: new Map() };
+			this.branchStates.set(path, state);
+		}
+		return state;
+	}
+
+	/**
+	 * Forget the branch state of every note no longer open in a tab. A background tab that
+	 * has not been looked at since startup holds a deferred view, so the note is read off
+	 * the leaf's view state rather than its view. The note on show is always kept: it can
+	 * be open in a view other than a markdown one.
+	 */
+	private pruneBranchStates(): void {
+		const open = new Set<string>();
+		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			const file = leaf.getViewState().state?.file;
+			if (typeof file === "string") open.add(file);
+		}
+		if (this.currentPath) open.add(this.currentPath);
+
+		for (const path of this.branchStates.keys()) {
+			if (!open.has(path)) this.branchStates.delete(path);
+		}
+	}
+
 	private render(): void {
 		const el = this.contentEl;
 		el.empty();
@@ -239,21 +283,21 @@ export class FolgezettelView extends ItemView {
 		const active = this.app.workspace.getActiveFile();
 		const note = active && active.extension === "md" ? active : null;
 
-		// Reset the per-note branch choices whenever the shown note changes — including
-		// to *none* (a non-file view like the graph). Tracking that null keeps the guard
-		// honest, so returning to a note tab refreshes the pane instead of leaving the
-		// "open a note" message up.
+		// Track the shown note — including *none* (a non-file view like the graph). Tracking
+		// that null keeps the guard honest, so returning to a note tab refreshes the pane
+		// instead of leaving the "open a note" message up. A change also lets go of the state
+		// of a note that is no longer open, since a tab may have moved on to another note.
 		if ((note?.path ?? null) !== this.currentPath) {
 			this.currentPath = note?.path ?? null;
-			this.expandedBranches.clear();
-			this.branchSelections.clear();
 			this.previewBranch = null;
+			this.pruneBranchStates();
 		}
 		if (!note) {
 			el.createDiv({ cls: "folgezettel-empty", text: "Open a note to see its Folgezettel sequence." });
 			return;
 		}
 
+		this.branches = this.branchStateFor(note.path);
 		const { propertyName, maxSteps } = this.plugin.settings;
 		this.graph = buildGraph(this.app, propertyName);
 		this.bookmarks = bookmarkedPaths(this.app);
@@ -323,7 +367,7 @@ export class FolgezettelView extends ItemView {
 		const kind: EntryKind = isActive ? "active" : "incoming";
 
 		let marker: HTMLElement | null = null;
-		if (menu && this.expandedBranches.has(menu.key)) this.renderMenuRow(container, file, kind, menu);
+		if (menu && this.branches.expanded.has(menu.key)) this.renderMenuRow(container, file, kind, menu);
 		else marker = this.renderEntry(container, file, kind);
 
 		// The circle belongs to the note that *has* the branches, so claim this row's
@@ -408,7 +452,7 @@ export class FolgezettelView extends ItemView {
 			visited.add(next.path);
 
 			let marker: HTMLElement | null = null;
-			if (pending && this.expandedBranches.has(pending.key)) this.renderMenuRow(parent, next, "outgoing", pending);
+			if (pending && this.branches.expanded.has(pending.key)) this.renderMenuRow(parent, next, "outgoing", pending);
 			else marker = this.renderEntry(parent, next, "outgoing");
 			remaining--;
 
@@ -507,7 +551,7 @@ export class FolgezettelView extends ItemView {
 	 * on where the current branch runs.
 	 */
 	private selectedOption(key: string, options: TFile[]): TFile {
-		const stored = this.branchSelections.get(key);
+		const stored = this.branches.selections.get(key);
 		return options.find((f) => f.path === stored) ?? options[0];
 	}
 
@@ -551,8 +595,8 @@ export class FolgezettelView extends ItemView {
 		toggle.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
 			this.previewBranch = null;
-			if (this.expandedBranches.has(menu.key)) this.expandedBranches.delete(menu.key);
-			else this.expandedBranches.add(menu.key);
+			if (this.branches.expanded.has(menu.key)) this.branches.expanded.delete(menu.key);
+			else this.branches.expanded.add(menu.key);
 			this.render();
 		});
 	}
@@ -586,8 +630,8 @@ export class FolgezettelView extends ItemView {
 			});
 			el.addEventListener("click", (event: MouseEvent) => {
 				this.previewBranch = null;
-				this.expandedBranches.delete(menu.key);
-				if (kind === "outgoing") this.branchSelections.set(menu.key, option.path);
+				this.branches.expanded.delete(menu.key);
+				if (kind === "outgoing") this.branches.selections.set(menu.key, option.path);
 				else void this.app.workspace.getLeaf(event.ctrlKey || event.metaKey).openFile(option);
 				this.render();
 			});

@@ -176,7 +176,7 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   anchoring breaks with it.
 - **Junctions are followed, not stopped.** A note with 2+ links takes the numbered circle
   and the strand continues along the chosen option — the reader's pick
-  (`branchSelections`) if any, else the **first declared link** (`selectedOption`). A
+  (`branches.selections`) if any, else the **first declared link** (`selectedOption`). A
   single link is followed, zero ends the strand. The per-direction note cap is
   `settings.maxSteps` (default 5, configurable 1–10; the branch head counts against it
   like any row). The upward chain is collected by `walkUp` and drawn farthest-first, so
@@ -202,11 +202,19 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   is emitted where the walk stops, it
   lands inside the innermost continuation container, so `renderContinuation` rebuilds it
   with the rest of a hover preview instead of leaving a stale leaf behind.
-- **Branch state is pane-local and per-note.** `expandedBranches` (which junction
-  cards are open) and `branchSelections` (junction key → chosen option path) live on
-  the view and drive `renderStrand`. They are **cleared whenever the shown note
-  changes** (the `currentPath` guard in `render()`, which also treats "no note" as a
-  change) but survive metadata refreshes.
+- **Branch state is pane-local and per-note, and lives as long as the note is open.**
+  A note's `BranchState` — `expanded` (which junction cards are open) and `selections`
+  (junction key → chosen option path) — is kept in the view's `branchStates`, keyed by
+  note path; `render()` points `branches` at the shown note's entry, and that drives
+  `renderStrand`. So switching to another tab and back finds a strand exactly as the
+  reader left it — the menus left open included — and a metadata refresh never touches it.
+  It goes when the note's **last tab** does: `pruneBranchStates` keeps only the notes some
+  markdown leaf still shows, and runs on `layout-change` (a background tab closing changes
+  no active note) and whenever the shown note changes (a tab that moved on to another
+  note). It reads each leaf's `getViewState().state.file`, not its view, because a
+  background tab not looked at since startup holds a deferred view; and it always keeps the
+  shown note, which may sit in a view that is not a markdown one. Only the hover
+  `previewBranch` still resets with the note.
   Junction key = `` `${kind}|${junction.path}` ``, where `kind` is the entry's slot
   (`incoming` / `outgoing` / `active`) — see `branchKey`.
 - **The circle goes on the note that has the links; the menu opens one row down.**
@@ -294,8 +302,8 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   `navigate.ts` follows `outgoing[...][0]` at every junction, and the panel's
   `selectedOption` defaults to `options[0]` — so a jump command and the drawn strand
   agree on where the current branch runs. The panel's only departure is the reader's own
-  `branchSelections`, which is transient, pane-local exploration and resets with the
-  note. Keep the two in step: changing the default on one side without the other
+  `branches.selections`, which is pane-local exploration and lasts only as long as the
+  note stays open. Keep the two in step: changing the default on one side without the other
   re-opens the split this rule exists to close.
 - **A written link goes to the end, and only to the end.** Both authoring commands append,
   never insert — so a new note is a further branch off the active note and the current
