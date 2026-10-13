@@ -77,11 +77,11 @@ export function positionPreview(popoverEl: HTMLElement, itemEl: HTMLElement, vie
 	if (!sidebar || !itemEl.isConnected) return;
 
 	// Obsidian's positioner caps the height to the room left where *it* was aiming, and
-	// pins the box by whichever edges suited it. We aim elsewhere, so start from the
-	// popover's own natural size and drive it from top/left alone.
-	popoverEl.style.maxHeight = "";
-	popoverEl.style.right = "";
-	popoverEl.style.bottom = "";
+	// pins the box by whichever edges suited it. We aim elsewhere, so drop those inline
+	// values — back to the popover's own natural size — and drive it from top/left alone.
+	popoverEl.style.removeProperty("max-height");
+	popoverEl.style.removeProperty("right");
+	popoverEl.style.removeProperty("bottom");
 
 	const win = popoverEl.win;
 	const bar = sidebar.el.getBoundingClientRect();
