@@ -191,7 +191,8 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   segments hidden — and does **not** count against `maxSteps`. Upward it is drawn by
   `renderFarEndParent`, which gives it the junction's numbered circle when that note forks
   and, when it does not, the open circle a leaf gets at that same size (the beginning of
-  the structure, the thread's other end) — visual only, with no expand handler, because
+  the structure, the thread's other end); a beginning that forks gets the numbered circle
+  drawn open, saying both — visual only, with no expand handler, because
   everything between it and the active note is fixed and so there is nothing to choose.
   Downward it keeps the ordinary dot, hollow because a leaf always is. Three
   cases draw nothing: the note is already on screen (the `visited` guard; downward,
@@ -516,7 +517,8 @@ background simply follows the cursor.
 A **bookmarked** note's icon is drawn in `--fz-bookmark-color`, which is
 `--interactive-accent`: the filled dot takes it as a fill, a leaf's ring as its ring colour,
 and the branch circle as its fill, with the count knocked out in `--text-on-accent`, the ink
-Obsidian pairs with that fill in either theme. The accent is the reader's own colour, follows
+Obsidian pairs with that fill in either theme. An open root circle takes it on ring and
+count together. The accent is the reader's own colour, follows
 whatever the theme or they set, and nothing else in the gutter uses it — the active row is
 marked by its highlight, not its icon — so it means "bookmarked" and nothing else.
 
@@ -550,6 +552,18 @@ and the pointer cursor taken back off under `.is-detached`, since there is nothi
 click. That beginning also takes the row class `is-root`, which leaves the circle empty and
 rings it like a leaf, so the thread's two ends match; its rule is repeated under `:hover`
 to outrank the `.is-detached` hover fill above it.
+
+`is-root` is a fact about the note — nothing lists it in its Folgezettel property
+(`isRoot`, off `incoming`) — so `renderEntry` puts it on every row it draws for one, not
+just the far end. It only changes a **branch circle**: a beginning that forks keeps its
+count but is drawn open, ring and count both `currentColor` in `--nav-item-color`, as the
+far end, as an ancestor and as the active note alike. A beginning that does not fork keeps
+its ordinary dot inside the strand; only the far end draws it as the empty ring. In the
+strand the open circle is still the fork's control, so on hover ring and count take
+`--nav-item-color-hover` where a filled circle changes its fill (`:not(.is-detached)`,
+since the far end is not a control). At the far end, a note that does not fork is treated as
+the beginning even when a link cycle gives it a predecessor — it is what `findParent` fell
+back to — so it never ends up a filled circle with nothing in it.
 
 `.folgezettel-list` is a single flex column with `justify-content: flex-start`, so the
 strand hangs from the panel's top edge. The scrolling is one level up, on

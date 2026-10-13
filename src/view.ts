@@ -470,24 +470,30 @@ export class FolgezettelView extends ItemView {
 	 * It carries the junction's numbered circle when that note forks — so the fork it
 	 * stands for stays legible from here — and, when it does not, the open circle a leaf
 	 * gets at that same size: this is the beginning of the structure, the thread's other
-	 * end. Neither is a control: everything between this note and the active one is fixed,
+	 * end. A beginning that forks keeps the count and is drawn open as well, so it says
+	 * both. Neither is a control: everything between this note and the active one is fixed,
 	 * so there is nothing here to choose.
 	 * The title still opens the note, as on every entry.
 	 */
 	private renderFarEndParent(parent: HTMLElement, file: TFile): void {
 		const options = this.graph?.outgoing.get(file.path) ?? [];
 		const forks = options.length >= 2;
+		// A far end that does not fork is the beginning `findParent` fell back to, so it is
+		// open even where a link cycle leaves it with a predecessor.
+		const root = !forks || this.isRoot(file);
 
 		const row = parent.createDiv({
-			cls: `folgezettel-entry is-branch is-incoming is-detached${forks ? "" : " is-root"}${
+			cls: `folgezettel-entry is-branch is-incoming is-detached${root ? " is-root" : ""}${
 				this.isBookmarked(file) ? " is-bookmarked" : ""
 			}`,
 		});
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
-		const circle = marker.createDiv({
-			cls: "folgezettel-branch-toggle",
-			attr: { "aria-label": forks ? `Forks into ${options.length} notes` : "Beginning of the structure" },
-		});
+		const label = !forks
+			? "Beginning of the structure"
+			: root
+				? `Beginning of the structure, forks into ${options.length} notes`
+				: `Forks into ${options.length} notes`;
+		const circle = marker.createDiv({ cls: "folgezettel-branch-toggle", attr: { "aria-label": label } });
 		circle.createSpan({ cls: "folgezettel-branch-count", text: forks ? String(options.length) : "" });
 
 		this.renderTitleLink(row, file);
@@ -517,6 +523,15 @@ export class FolgezettelView extends ItemView {
 	private forkOptions(file: TFile): TFile[] | null {
 		const options = this.graph?.outgoing.get(file.path) ?? [];
 		return options.length >= 2 ? options : null;
+	}
+
+	/**
+	 * Whether `file` is the beginning of a structure: no note lists it in its Folgezettel
+	 * property. A fact about the note, not about where it is drawn, so a beginning that
+	 * forks wears its open circle as the far end, as an ancestor and as the active note.
+	 */
+	private isRoot(file: TFile): boolean {
+		return (this.graph?.incoming.get(file.path)?.length ?? 0) === 0;
 	}
 
 	/**
@@ -614,10 +629,13 @@ export class FolgezettelView extends ItemView {
 		// A note nothing continues ends the thread; its dot is drawn hollow (see Styling),
 		// so a real ending reads differently from a strand the step cap merely cut short.
 		const leaf = (this.graph?.outgoing.get(file.path)?.length ?? 0) === 0;
+		// A beginning keeps its row class whichever icon it ends up with; only the branch
+		// circle a fork trades the dot for reads it (see Styling).
+		const root = this.isRoot(file);
 		const row = parent.createDiv({
 			cls: `folgezettel-entry is-${kind}${detached ? " is-detached" : ""}${leaf ? " is-leaf" : ""}${
-				this.isBookmarked(file) ? " is-bookmarked" : ""
-			}`,
+				root ? " is-root" : ""
+			}${this.isBookmarked(file) ? " is-bookmarked" : ""}`,
 		});
 
 		// Left gutter: the indentation guide rail and a dot marking the note — accent for

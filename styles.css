@@ -302,11 +302,21 @@
 
 /* The beginning of the structure is drawn the way a leaf is — an open circle — at the
    branch circle's size, so both ends of the thread read alike and only the forks in
-   between are filled. The :hover selector repeats it to outrank the rule above. */
+   between are filled. A beginning that forks keeps its count inside the open circle,
+   wherever its circle is drawn: as the far end, as an ancestor, as the active note. Ring
+   and count are both `currentColor`, so one colour change recolours the two together.
+   The :hover selector repeats it to outrank the rule above. */
 .folgezettel-entry.is-root .folgezettel-branch-toggle,
 .folgezettel-entry.is-root .folgezettel-branch-toggle:hover {
 	background-color: transparent;
-	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--nav-item-color);
+	box-shadow: inset 0 0 0 var(--fz-ring-width) currentColor;
+	color: var(--nav-item-color);
+}
+
+/* Inside the strand that circle is a control, and answers the pointer the way a filled
+   one does: in the hover colour, worn by the ring and the count instead of a fill. */
+.folgezettel-entry.is-root:not(.is-detached) .folgezettel-branch-toggle:hover {
+	color: var(--nav-item-color-hover);
 }
 
 /*
@@ -391,7 +401,7 @@
 .folgezettel-entry.is-bookmarked.is-root .folgezettel-branch-toggle,
 .folgezettel-entry.is-bookmarked.is-root .folgezettel-branch-toggle:hover {
 	background-color: transparent;
-	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--fz-bookmark-color);
+	color: var(--fz-bookmark-color);
 }
 
 .folgezettel-entry.is-bookmarked .folgezettel-backlink-icon {
