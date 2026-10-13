@@ -239,8 +239,9 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
 - **A fork reads as a normal row until its circle is clicked.** Collapsed, both rows are
   ordinary entries: the forking note's title (click opens it) with the circle in its
   gutter, and below it the branch head's title. Clicking the circle turns the row below
-  into the option list — the **current branch first**, carrying the hover background until
-  the cursor takes it — and drops that row's own gutter icon for as long as the menu is
+  into the option list — in the **order the property declares**, with the current branch
+  marked in place by the hover background until the cursor takes it, never moved to the
+  top — and drops that row's own gutter icon for as long as the menu is
   open. Picking an option collapses it. So a title click and a gutter-icon click on the
   same row do different things, and the icon acts on the row beneath.
 - **Hover preview is a partial rebuild — never route it through `render()`.** Hovering
@@ -251,7 +252,7 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   untouched. A full `render()` here tears down the hovered element and thrashes
   mouseenter/mouseleave (empirically ~19 renders + a stuck preview), which is exactly
   the bug this design avoids. The card's option order never changes during preview
-  (chosen option stays first). **The hover handlers are attached only when
+  (it is the declared order, always). **The hover handlers are attached only when
   `!Platform.isMobile`** — touch has no hover and never fires `mouseleave`, so a mobile
   preview would get stuck; mobile relies on tap-to-select (the option `click` handler).
 - **A bookmark is a colour, never a shape.** A bookmarked note keeps whatever gutter icon
@@ -506,10 +507,12 @@ a `box-shadow` border ring, options divided by `border-bottom`). An expanded car
 small margin on both sides, so its filled background never butts against a neighbouring
 filled row — the active one above or below it, or another expanded card.
 
-The branch currently taken (`.is-current`, always the first option) wears the hover
-background before the cursor is anywhere in the list, so the menu opens already showing
-where the strand runs. It is written as `.folgezettel-branch-options:not(:hover)` rather
-than a rule that clears the highlight when the list is hovered: hovering the current option
+The options keep the order the Folgezettel property declares them in. The branch currently
+taken (`.is-current`) stays wherever it was declared, and wears the hover background
+before the cursor is anywhere in the list, so the menu opens already showing where the
+strand runs. It was once moved to the top, which reshuffled the list after every pick and
+hid the declared order — the very order that says which branch continues the strand. The
+highlight is written as `.folgezettel-branch-options:not(:hover)` rather than a rule that clears the highlight when the list is hovered: hovering the current option
 would then have to out-specify its own clearing rule. With `:not(:hover)` the two rules
 never overlap — inside the list only `.folgezettel-branch-option:hover` applies, and the
 background simply follows the cursor.

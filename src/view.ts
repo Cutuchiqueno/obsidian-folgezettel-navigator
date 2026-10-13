@@ -575,12 +575,11 @@ export class FolgezettelView extends ItemView {
 		// redraws whatever icon the note then chosen calls for.
 		row.createDiv({ cls: "folgezettel-marker" });
 
-		// This note leads the list; the rest keep their declared order. Until the reader
-		// picks something else it *is* the first link, so an untouched menu simply reads in
-		// the order the property declares.
-		const ordered = [file, ...menu.options.filter((f) => f.path !== file.path)];
+		// The options read in the order the property declares them, whichever is taken: the
+		// order is the sequence's own, and a pick must not reshuffle it. This note is marked
+		// in place instead of being moved to the top.
 		const optionList = row.createDiv({ cls: "folgezettel-branch-options" });
-		for (const option of ordered) {
+		for (const option of menu.options) {
 			const el = optionList.createDiv({
 				cls: `folgezettel-branch-option${option.path === file.path ? " is-current" : ""}`,
 				text: option.basename,
