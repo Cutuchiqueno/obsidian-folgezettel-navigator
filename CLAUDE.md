@@ -9,7 +9,9 @@ plugin, see `AGENTS.md`.
 - `npm run dev` — esbuild in watch mode; rebuilds `main.js` on every source change.
 - `npm run build` — full type-check (`tsc -noEmit`) then a minified production bundle.
 - `npm run lint` — ESLint with Obsidian's own plugin rule set, `eslint-plugin-obsidianmd`.
-- `npm version <patch|minor|major>` — bumps `manifest.json` + `versions.json` via `version-bump.mjs`.
+- `npm version <patch|minor|major> --no-git-tag-version` — bumps `manifest.json` +
+  `versions.json` via `version-bump.mjs`. Without the flag npm also tags `vX.Y.Z`, which
+  Obsidian cannot use — see [Releases](#releases).
 
 **`npm run lint` passes before every commit.** It runs the `recommended` config of
 `eslint-plugin-obsidianmd` — the guidelines Obsidian's review applies to a community
@@ -41,6 +43,31 @@ Development happens on **`develop`**, and commits go there directly — no featu
 branches, however tidy one would look. **`main` is for releases**: it advances when a version
 is cut, not as work lands. So commit to `develop` where you stand; do not branch off it first,
 and do not commit to `main`.
+
+## Releases
+
+Obsidian reads `manifest.json` from `main` (the default branch) and installs the assets of
+the GitHub release **tagged exactly that version**. So `main` must never declare a version
+that has no published release: the plugin page then shows "No release matches your manifest
+version" and updates cannot be installed. That happened from 2026-09-08 to 2026-10-13, when
+1.2.0 sat in `main`'s manifest five weeks before its release existed. Hence the order:
+
+1. **On `develop`, in one commit "Prepare for release X.Y.Z":** bump the version with
+   `npm version <patch|minor|major> --no-git-tag-version` (manifest, `versions.json`,
+   `package.json`, lock file), date the `CHANGELOG.md` entry and make it cover everything
+   since the last release, bring `README.md` in line, and pass `npm run lint` and
+   `npm run build`. Bump the version **only** here, never along with a feature.
+   `--no-git-tag-version` is not optional: npm's tag prefix is `v`, and Obsidian looks the
+   release up by the bare version.
+2. **Fast-forward `main` and tag it:** `git fetch . develop:main`, then `git tag X.Y.Z main`
+   — a plain tag, no `v`, as every earlier release has.
+3. **Publish, release before `main`:** push `develop` and the tag; create the release from
+   the tag (`gh release create X.Y.Z --verify-tag`) with the `main.js`, `manifest.json` and
+   `styles.css` built from it, titled "Version X.Y.Z - Feature Release" (or what fits), and
+   the version's `CHANGELOG.md` section as notes, headings raised one level. **Only then
+   push `main`.**
+4. Check that the release is published (not a draft) and marked latest, and that its
+   assets download identical to the local build.
 
 ## Architecture
 
