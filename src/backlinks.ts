@@ -35,23 +35,41 @@ export function bodyBacklinks(app: App, file: TFile): TFile[] {
 	const sources: TFile[] = [];
 
 	for (const source of app.vault.getMarkdownFiles()) {
-		if (source.path === file.path) continue;
-
-		const cache = app.metadataCache.getFileCache(source);
-		if (!cache) continue;
-
-		const refs: Reference[] = [...(cache.links ?? []), ...(cache.embeds ?? [])];
-		// One reference is enough: a note that links here ten times is still one entry.
-		if (refs.some((ref) => resolves(app, ref, source, file))) sources.push(source);
+		// One reference is enough: a note that links here ten times is still one entry. The
+		// note itself never qualifies, since a note's links leave out its own references.
+		if (bodyLinks(app, source).some((link) => link.target.path === file.path)) sources.push(source);
 	}
 
 	return sources;
 }
 
-/** Whether a body reference in `source` points at `file`. */
-function resolves(app: App, ref: Reference, source: TFile, file: TFile): boolean {
-	// `link` is the raw target: `getLinkpath` drops the `#heading` / `^block` subpath, and an
-	// alias never reaches it (that is `displayText`).
-	const dest = app.metadataCache.getFirstLinkpathDest(getLinkpath(ref.link), source.path);
-	return dest?.path === file.path;
+/** A body reference together with the note it resolves to. */
+export interface BodyLink {
+	target: TFile;
+	reference: Reference;
+}
+
+/**
+ * The links (and embeds) in the **body** of `source`, each with the note it points at, in
+ * the order they appear, repeats included. Links that resolve to nothing are dropped, and so
+ * are references to the note itself: `[[#Heading]]` resolves to its own source, and a table
+ * of contents is not a link to another note.
+ *
+ * `bodyBacklinks` is this, read backwards, and `index-notes.ts` reads an index note's body
+ * through it — so both draw the line between body and frontmatter in the same place. The
+ * reference comes along because the index needs what a link *calls* its note, too.
+ */
+export function bodyLinks(app: App, source: TFile): BodyLink[] {
+	const cache = app.metadataCache.getFileCache(source);
+	if (!cache) return [];
+
+	const links: BodyLink[] = [];
+	const refs: Reference[] = [...(cache.links ?? []), ...(cache.embeds ?? [])];
+	for (const reference of refs) {
+		// `link` is the raw target: `getLinkpath` drops the `#heading` / `^block` subpath, and
+		// an alias never reaches it (that is `displayText`).
+		const target = app.metadataCache.getFirstLinkpathDest(getLinkpath(reference.link), source.path);
+		if (target && target.path !== source.path) links.push({ target, reference });
+	}
+	return links;
 }

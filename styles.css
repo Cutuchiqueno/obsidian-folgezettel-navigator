@@ -363,49 +363,48 @@
 	transform: translate(-50%, -50%);
 }
 
-/* A bookmarked note keeps whatever icon its role calls for — dot, open ring, or the
-   numbered branch circle — and changes only its colour, so the marker still says what kind
-   of note it is while the bookmark reads at a glance. The class sits on the *row*, so one
-   rule per shape covers every icon that row can end up with.
+/* A note an index note links to keeps whatever icon its role calls for — dot, open ring, or
+   the numbered branch circle — and changes only its colour, so the marker still says what
+   kind of note it is while its place in an index reads at a glance. The class sits on the
+   *row*, so one rule per shape covers every icon that row can end up with.
 
    The colour is the accent itself. It is the one colour in the panel that is already the
    reader's own — set by the theme, and by them — and nothing else in the gutter uses it:
    the active note is marked by its row highlight rather than by its icon, so the accent is
-   free to mean "bookmarked" and only that. Earlier readings tried to derive a colour of
-   their own (a muted complement of the accent, and three fixed hues before it) to stay
-   clear of an accent-coloured active dot; with that dot gone the derivation has nothing
-   left to avoid.
+   free to mean "indexed" and only that. Earlier readings tried to derive a colour of their
+   own (a muted complement of the accent, and three fixed hues before it) to stay clear of an
+   accent-coloured active dot; with that dot gone the derivation has nothing left to avoid.
 
-   The count knocked out of a bookmarked branch circle is `--text-on-accent`, the ink
-   Obsidian pairs with that fill in either theme; the backlinks icon takes the colour as its
-   stroke, since that is what `currentColor` draws it in. */
+   The count knocked out of an indexed branch circle is `--text-on-accent`, the ink Obsidian
+   pairs with that fill in either theme; the backlinks icon takes the colour as its stroke,
+   since that is what `currentColor` draws it in. */
 .folgezettel-view {
-	--fz-bookmark-color: var(--interactive-accent);
+	--fz-index-color: var(--interactive-accent);
 }
 
-.folgezettel-entry.is-bookmarked .folgezettel-dot {
-	background-color: var(--fz-bookmark-color);
+.folgezettel-entry.is-indexed .folgezettel-dot {
+	background-color: var(--fz-index-color);
 }
 
-.folgezettel-entry.is-bookmarked.is-leaf .folgezettel-dot {
+.folgezettel-entry.is-indexed.is-leaf .folgezettel-dot {
 	background-color: transparent;
-	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--fz-bookmark-color);
+	box-shadow: inset 0 0 0 var(--fz-ring-width) var(--fz-index-color);
 }
 
-.folgezettel-entry.is-bookmarked .folgezettel-branch-toggle,
-.folgezettel-entry.is-bookmarked .folgezettel-branch-toggle:hover {
-	background-color: var(--fz-bookmark-color);
+.folgezettel-entry.is-indexed .folgezettel-branch-toggle,
+.folgezettel-entry.is-indexed .folgezettel-branch-toggle:hover {
+	background-color: var(--fz-index-color);
 	color: var(--text-on-accent);
 }
 
-.folgezettel-entry.is-bookmarked.is-root .folgezettel-branch-toggle,
-.folgezettel-entry.is-bookmarked.is-root .folgezettel-branch-toggle:hover {
+.folgezettel-entry.is-indexed.is-root .folgezettel-branch-toggle,
+.folgezettel-entry.is-indexed.is-root .folgezettel-branch-toggle:hover {
 	background-color: transparent;
-	color: var(--fz-bookmark-color);
+	color: var(--fz-index-color);
 }
 
-.folgezettel-entry.is-bookmarked .folgezettel-backlink-icon {
-	color: var(--fz-bookmark-color);
+.folgezettel-entry.is-indexed .folgezettel-backlink-icon {
+	color: var(--fz-index-color);
 }
 
 /*

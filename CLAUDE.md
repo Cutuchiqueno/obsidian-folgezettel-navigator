@@ -95,9 +95,9 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   `renderStartOfBranch` and `renderEndOfBranch` add the detached entries at the two ends.
   Below all of that, `renderBacklinks` draws the second section (see `backlinks.ts`) into the
   same scroll container, so the two lists scroll as one column.
-  `refresh()` re-renders on demand. Each render also reads `bookmarkedPaths` once (see
-  `bookmarks.ts`) so entries can be marked as bookmarked, and every entry's title carries the
-  vault's file context menu (`attachContextMenu`, see below).
+  `refresh()` re-renders on demand. Each render also reads `indexedNotes` once (see
+  `index-notes.ts`) so entries an index note links to can be marked, and every entry's title
+  carries the vault's file context menu (`attachContextMenu`, see below).
 - **`preview.ts`** — `positionPreview(popoverEl, itemEl, viewEl)`: where the native page-preview
   popover goes when the panel is docked in a sidebar. Pure geometry, no `App`, and the only DOM
   it touches is the popover's own box — `view.ts` supplies the three elements and does the
@@ -115,15 +115,24 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   strand is the frontmatter relation, this is everything else. Neither
   `metadataCache.resolvedLinks` (it counts both kinds together) nor `getBacklinksForFile`
   (undeclared) can answer the question.
-- **`bookmarks.ts`** — `bookmarkedPaths(app)` (the paths of every bookmarked note) and
-  `onBookmarksChanged(app, cb)`, read off Obsidian's **core Bookmarks plugin**. That plugin
-  is not public API — neither `app.internalPlugins` nor its instance appears in
-  `obsidian.d.ts` — so the whole module is a narrow structural type over it and every step
-  is optional: disabled, missing or reshaped, the panel draws no bookmarks rather than
-  failing to draw. Only whole-`file` entries count — Obsidian's own reading of "this note is
-  bookmarked": a bookmarked *folder* bookmarks the folder, not its notes, and an entry with
-  a `subpath` marks a heading or block, which is why Obsidian leaves that note's tab header
-  unmarked. Groups are walked through. Read fresh per render like the graph, and for the same reason.
+  `bodyLinks(app, source)` is the same reading forwards — each link in one note's body with
+  the note it resolves to (`{ target, reference }`) — and the only place a body is read:
+  `bodyBacklinks` is built from it and `index-notes.ts` reads index notes through it, so the
+  two cannot disagree on where a body ends. It drops a note's references to itself, and that
+  is not cosmetic: an empty linkpath resolves to its own source, so an index's table of
+  contents (`[[#Heading]]`) would otherwise index the index.
+- **`index-notes.ts`** — `indexedNotes(app, typeProperty, indexType)`: every note an
+  **index note** links to in its body, which the panel draws in the accent colour, keyed by
+  path and mapped to the **names** those links give it. An index note is one whose note type
+  property holds the index type — settings `noteTypeProperty` / `indexValue`, default
+  `typ: index` — as the whole value or as one entry of a list, compared as trimmed text
+  ignoring case (so `true` also matches the YAML boolean of `index: true`). The property
+  name itself is read exactly, as `graph.ts` reads the Folgezettel one. A link's name
+  (`linkName`) is the part after `|` of a wikilink, or a markdown link's text, read off
+  `displayText`; a bare `[[Note]]` names nothing, since its `displayText` is only the link
+  again, and leaves the note indexed with an empty list. Names are distinct, in index and
+  appearance order. Read fresh per render like the graph, and it needs no event of its own:
+  editing an index note fires `metadataCache` `changed`, which re-renders anyway.
 - **`navigate.ts`** — pure jump targets over a `FolgezettelGraph`, no DOM and no `App`:
   `previousNotes`/`nextNotes` (the two axes) plus `findParent`, `findLeaf`,
   `findNextJunction`, `findPreviousJunction`. Every walk carries a `visited` set, so a
@@ -150,11 +159,12 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   the dialog open and appears under the field, so a rejected name is never lost to a
   notice that also took the typed text with it.
 - **`settings.ts`** — `FolgezettelSettings` (`propertyName`, `maxSteps`,
-  `newNoteFolder`), `DEFAULT_SETTINGS` (`folgezettel`, `5`, `""`), and the
-  `FolgezettelSettingTab`: a text field for the property, a folder field with
-  type-ahead for the new-note folder, a `1–10` slider for the per-direction note count.
+  `newNoteFolder`, `noteTypeProperty`, `indexValue`), `DEFAULT_SETTINGS` (`folgezettel`, `5`,
+  `""`, `typ`, `index`), and the `FolgezettelSettingTab`: a text field for the property, a
+  folder field with type-ahead for the new-note folder, a `1–10` slider for the
+  per-direction note count, and two text fields for what makes a note an index note.
   The tab is written **twice over**, and deliberately:
-  `getSettingDefinitions()` declares the three settings (Obsidian 1.13+), which is what
+  `getSettingDefinitions()` declares the settings (Obsidian 1.13+), which is what
   puts them in Obsidian's settings **search** — a tab that only draws itself in
   `display()` cannot be found there — and gets the folder field its type-ahead from
   Obsidian; `display()` stays as the imperative fallback for the older versions
@@ -165,8 +175,9 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   `getSettingDefinitions()` returns anything, so the two never both run — keep them
   saying the same thing (`LABELS` holds the wording for both), and drop the fallback
   when `minAppVersion` reaches 1.13. `setControlValue` is overridden because the
-  inherited one only writes the data file: it normalizes the two text fields and then
-  goes through `saveSettings()`, so a change re-renders the open panels.
+  inherited one only writes the data file: it normalizes the text fields (a cleared
+  property or index field falls back to its default) and then goes through
+  `saveSettings()`, so a change re-renders the open panels.
 - **`main.ts`** — plugin entry: loads settings, registers the view type (passing itself
   to the view), the ribbon icon, the panel command, the navigation commands (via
   `registerNavigationCommands`), the authoring commands (via
@@ -299,16 +310,27 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   (it is the declared order, always). **The hover handlers are attached only when
   `!Platform.isMobile`** — touch has no hover and never fires `mouseleave`, so a mobile
   preview would get stuck; mobile relies on tap-to-select (the option `click` handler).
-- **A bookmark is a colour, never a shape.** A bookmarked note keeps whatever gutter icon
-  its role calls for — dot, hollow leaf ring, or the numbered branch circle — and changes
-  only its colour, so the marker still answers "what kind of note is this?" while the
-  bookmark reads at a glance. `renderEntry` and `renderFarEndParent` put `is-bookmarked` on
-  the **row**, not the icon, so the one rule per shape covers every icon that row can end up
-  with — including the branch circle `attachBranchToggle` swaps in afterwards. The colour is
+- **An indexed note is a colour, never a shape.** A note an index note links to in its body
+  keeps whatever gutter icon its role calls for — dot, hollow leaf ring, or the numbered
+  branch circle — and changes only its colour, so the marker still answers "what kind of
+  note is this?" while its place in an index reads at a glance. `renderEntry`,
+  `renderFarEndParent` and `renderBacklinkEntry` put `is-indexed` on the **row**, not the
+  icon, so the one rule per shape covers every icon that row can end up with — including the
+  branch circle `attachBranchToggle` swaps in afterwards. The colour is
   `--interactive-accent`, and it is the **only** thing in the gutter that wears it: the active
   note is marked by its row highlight alone, its icon drawn in the same muted grey as every
-  other (see Styling). Give the active note's icon the accent back and the bookmark colour has
-  to go looking for one of its own again.
+  other (see Styling). Give the active note's icon the accent back and the index colour has
+  to go looking for one of its own again. The colour used to mark **bookmarks**, read off the
+  core Bookmarks plugin; index notes replaced them, and `bookmarks.ts` went with them.
+- **The gutter's only tooltip is what the index calls the note.** Hovering an indexed note's
+  gutter shows the names its index links give it (`attachIndexNames`, `setTooltip`, one name
+  per line); a note no link names gets none. It is set on the **marker**, not the icon: the
+  icon is not final when the row is drawn — `attachBranchToggle` empties the marker to trade
+  the dot for the circle, which takes the children and leaves the marker's attributes — and
+  the marker also gives the pointer the whole gutter cell rather than an 8px dot. Nothing else
+  in the gutter has a tooltip. The branch circle used to say "Show N branches" and the far-end
+  circle "Forks into N notes" / "Beginning of the structure"; both were dropped as not worth
+  the hover, so the tooltip, like the colour, means "indexed" and nothing else.
 - **The second section is a set, not a sequence — and it disappears when empty.** The
   backlinks below the strand are the notes that mention this one in prose: unordered (vault
   scan order, no reading direction to honour), unthreaded (no rail, because nothing threads
@@ -317,9 +339,9 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   there are none — the rule included — so a note nothing links to leaves the panel looking
   exactly as it did before the section existed; an empty heading would cost every such note a
   line to say nothing. Rows are otherwise ordinary entries and go through `renderTitleLink`
-  like every other, which is what gives them the preview, the menu and the bookmark colour for
-  free. They keep the `folgezettel-entry` class for two concrete reasons: the page preview
-  centres on `closest(".folgezettel-entry")`, and the bookmark rules are scoped to it.
+  like every other, which is what gives them the preview and the menu for free. They keep the
+  `folgezettel-entry` class for two concrete reasons: the page preview centres on
+  `closest(".folgezettel-entry")`, and the index-colour rules are scoped to it.
 - **Rendering is otherwise full teardown.** `render()` calls `contentEl.empty()` and
   rebuilds; expand/select/navigation mutate state and call `render()` (hover preview is
   the lone exception, above). It is wired to `metadataCache` `resolved`/`changed`, and —
@@ -396,7 +418,7 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
   drop a subpath; an alias never reaches `ref.link` (that is `displayText`).
 - **Body vs. frontmatter references:** `CachedMetadata` splits them — `links` and `embeds`
   against `frontmatterLinks` — which is what lets the two sections of the panel read the same
-  cache and never overlap (see `backlinks.ts`).
+  cache and never overlap, and what an index note's body is read off (see `backlinks.ts`).
 - **The Backlinks pane's icon:** `setIcon(el, "links-coming-in")`, the id that view returns
   from `getIcon()`. It is Obsidian's own registered icon, not a Lucide lookalike, so the
   section is marked with the symbol the reader already associates with the relation.
@@ -439,13 +461,8 @@ disjoint one (see `backlinks.ts`). Eleven source files under `src/`, each a clea
 - **Mobile:** the plugin is mobile-compatible (`isDesktopOnly: false`, no Node/Electron
   APIs). Everything works by tap, with a **long press** standing in for the right-click file
   menu (above); only the two desktop **hover** affordances — the branch option preview and the
-  page preview — are gated off via `Platform.isMobile`.
-- **Bookmarks:** `app.internalPlugins.getPluginById("bookmarks")`, through `bookmarks.ts`
-  — unofficial, hence the defensive reading there. Its instance's `changed` event re-renders
-  the open panels (registered in `view.ts:onOpen`); when it is unavailable the colour simply
-  waits for the next render there would have been anyway. The subscription is made once, at
-  `onOpen`, so a Bookmarks plugin *enabled later* is picked up by `bookmarkedPaths` (read per
-  render) but stops delivering its own live updates until the pane is reopened.
+  page preview — are gated off via `Platform.isMobile`. The third, the index names on an
+  indexed note's gutter, needs no gate: it is a plain tooltip, which touch never shows.
 - **File context menu:** right-clicking a title builds a `Menu` in `fileMenu`, adds what the
   vault gives a note plus this panel's own two authoring actions, fires
   `workspace.trigger("file-menu", menu, file, VIEW_TYPE, leaf)`, and then **prunes** what came
@@ -561,17 +578,18 @@ would then have to out-specify its own clearing rule. With `:not(:hover)` the tw
 never overlap — inside the list only `.folgezettel-branch-option:hover` applies, and the
 background simply follows the cursor.
 
-A **bookmarked** note's icon is drawn in `--fz-bookmark-color`, which is
-`--interactive-accent`: the filled dot takes it as a fill, a leaf's ring as its ring colour,
-and the branch circle as its fill, with the count knocked out in `--text-on-accent`, the ink
-Obsidian pairs with that fill in either theme. An open root circle takes it on ring and
-count together. The accent is the reader's own colour, follows
+An **indexed** note's icon — one an index note links to — is drawn in `--fz-index-color`,
+which is `--interactive-accent`: the filled dot takes it as a fill, a leaf's ring as its ring
+colour, and the branch circle as its fill, with the count knocked out in `--text-on-accent`,
+the ink Obsidian pairs with that fill in either theme. An open root circle takes it on ring
+and count together. The accent is the reader's own colour, follows
 whatever the theme or they set, and nothing else in the gutter uses it — the active row is
-marked by its highlight, not its icon — so it means "bookmarked" and nothing else.
+marked by its highlight, not its icon — so it means "indexed" and nothing else.
 
-It did not start there. While the active note's dot wore the accent, the bookmark needed a
-colour that stayed clear of it *and* still belonged to the panel, and those answer to
-different properties: **hue carries the distance, chroma carries the glare.** Three fixed
+It did not start there. While the active note's dot wore the accent, the marker colour —
+bookmarks, at the time — needed a colour that stayed clear of it *and* still belonged to the
+panel, and those answer to different properties: **hue carries the distance, chroma carries
+the glare.** Three fixed
 colours failed on one axis or the other — `--color-yellow` sat 4° off the true complement at
 full chroma (maximum distance *and* maximum vibration, exactly the pair that glares),
 `--color-cyan` glared the same way at 98°, `--color-pink` muted was quiet but only 62° off,
@@ -631,5 +649,5 @@ root font it never uses; short and centred, it reads as a break between two list
 as the frame of a second panel. Rows there are ordinary `.folgezettel-entry` elements with
 `is-backlink`, which hides both `.folgezettel-marker` rail segments, and their gutter carries
 `.folgezettel-backlink-icon` — Obsidian's Backlinks icon at `--icon-xs` (14px, the branch
-circle's slot) in `--nav-item-color`, taking `--fz-bookmark-color` when the row is bookmarked
+circle's slot) in `--nav-item-color`, taking `--fz-index-color` when the row is indexed
 like every other icon in the gutter.

@@ -14,11 +14,11 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { HoverPopover, ItemView, Menu, Platform, setIcon, TFile, WorkspaceLeaf } from "obsidian";
+import { HoverPopover, ItemView, Menu, Platform, setIcon, setTooltip, TFile, WorkspaceLeaf } from "obsidian";
 import { askForNewNote, pickNoteToLink } from "./authoring";
 import { bodyBacklinks } from "./backlinks";
-import { bookmarkedPaths, onBookmarksChanged } from "./bookmarks";
 import { buildGraph, FolgezettelGraph } from "./graph";
+import { indexedNotes } from "./index-notes";
 import { findLeaf, findParent } from "./navigate";
 import { positionPreview, previewSidebar } from "./preview";
 import type FolgezettelPlugin from "./main";
@@ -84,9 +84,8 @@ interface MenuItemInternals {
 
 /**
  * The two prompts the context menu needs. Both exist on `app.fileManager` and both are
- * missing from `obsidian.d.ts`, so they are reached the way `bookmarks.ts` reaches the
- * Bookmarks plugin: a structural type, and the menu item is only offered when the method is
- * actually there.
+ * missing from `obsidian.d.ts`, so they are reached through a structural type, and the menu
+ * item is only offered when the method is actually there.
  */
 interface FileManagerPrompts {
 	promptForFileRename?: (file: TFile) => unknown;
@@ -95,8 +94,8 @@ interface FileManagerPrompts {
 
 /**
  * The one thing about a live popover we override: where it draws itself. `position` is real
- * and absent from `obsidian.d.ts`, so it is reached the way `bookmarks.ts` reaches the
- * Bookmarks plugin — a structural type, used only where it is actually there.
+ * and absent from `obsidian.d.ts`, so it is reached through a structural type, used only
+ * where it is actually there.
  */
 interface PopoverPlacement {
 	position?: () => void;
@@ -164,11 +163,12 @@ export class FolgezettelView extends ItemView {
 	/** Set when a long press opened a menu, so the tap that ends it does not also navigate. */
 	private swallowNextTap = false;
 	/**
-	 * Paths of the bookmarked notes, read at the start of each render. Entries whose note
-	 * is in here draw their gutter icon — dot, ring or branch circle alike — in the
-	 * bookmark colour, so a marked note is recognisable whatever kind of note it is.
+	 * The notes an index note links to, by path, with the names those links give them; read
+	 * at the start of each render. Entries whose note is in here draw their gutter icon — dot,
+	 * ring or branch circle alike — in the index colour, so an indexed note is recognisable
+	 * whatever kind of note it is, and show the names on hover.
 	 */
-	private bookmarks = new Set<string>();
+	private indexed = new Map<string, string[]>();
 	/**
 	 * Per-card handle to the DOM container holding **everything below** that card, with
 	 * the two things that can go in it: what actually belongs there, and the strand a
@@ -224,14 +224,10 @@ export class FolgezettelView extends ItemView {
 		// Closing a tab changes no active note when it was in the background, so let the
 		// branch state of a note that has just lost its last tab go here.
 		this.registerEvent(this.app.workspace.on("layout-change", () => this.pruneBranchStates()));
-		// Vault link changes can alter the sequence for the current note.
+		// Vault link changes can alter the sequence for the current note, and which notes an
+		// index note lists.
 		this.registerEvent(this.app.metadataCache.on("resolved", () => this.render()));
 		this.registerEvent(this.app.metadataCache.on("changed", () => this.render()));
-		// Bookmarking a note recolours its marker, so follow the bookmarks too. The core
-		// plugin is optional and unofficial (see `bookmarks.ts`): when it gives us no event
-		// the colour simply waits for the next render there would have been anyway.
-		const bookmarksChanged = onBookmarksChanged(this.app, () => this.render());
-		if (bookmarksChanged) this.registerEvent(bookmarksChanged);
 
 		this.render();
 	}
@@ -298,9 +294,9 @@ export class FolgezettelView extends ItemView {
 		}
 
 		this.branches = this.branchStateFor(note.path);
-		const { propertyName, maxSteps } = this.plugin.settings;
+		const { propertyName, maxSteps, noteTypeProperty, indexValue } = this.plugin.settings;
 		this.graph = buildGraph(this.app, propertyName);
-		this.bookmarks = bookmarkedPaths(this.app);
+		this.indexed = indexedNotes(this.app, noteTypeProperty, indexValue);
 		this.branchContinuations.clear();
 
 		// Both sections scroll as one: the backlinks follow the strand rather than sitting in
@@ -528,17 +524,13 @@ export class FolgezettelView extends ItemView {
 
 		const row = parent.createDiv({
 			cls: `folgezettel-entry is-branch is-incoming is-detached${root ? " is-root" : ""}${
-				this.isBookmarked(file) ? " is-bookmarked" : ""
+				this.isIndexed(file) ? " is-indexed" : ""
 			}`,
 		});
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
-		const label = !forks
-			? "Beginning of the structure"
-			: root
-				? `Beginning of the structure, forks into ${options.length} notes`
-				: `Forks into ${options.length} notes`;
-		const circle = marker.createDiv({ cls: "folgezettel-branch-toggle", attr: { "aria-label": label } });
+		const circle = marker.createDiv({ cls: "folgezettel-branch-toggle" });
 		circle.createSpan({ cls: "folgezettel-branch-count", text: forks ? String(options.length) : "" });
+		this.attachIndexNames(marker, file);
 
 		this.renderTitleLink(row, file);
 	}
@@ -587,10 +579,7 @@ export class FolgezettelView extends ItemView {
 		marker.empty();
 		marker.parentElement?.addClass("is-branch");
 
-		const toggle = marker.createDiv({
-			cls: "folgezettel-branch-toggle",
-			attr: { "aria-label": `Show ${menu.options.length} branches` },
-		});
+		const toggle = marker.createDiv({ cls: "folgezettel-branch-toggle" });
 		toggle.createSpan({ cls: "folgezettel-branch-count", text: String(menu.options.length) });
 		toggle.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
@@ -678,15 +667,15 @@ export class FolgezettelView extends ItemView {
 		const row = parent.createDiv({
 			cls: `folgezettel-entry is-${kind}${detached ? " is-detached" : ""}${leaf ? " is-leaf" : ""}${
 				root ? " is-root" : ""
-			}${this.isBookmarked(file) ? " is-bookmarked" : ""}`,
+			}${this.isIndexed(file) ? " is-indexed" : ""}`,
 		});
 
-		// Left gutter: the indentation guide rail and a dot marking the note — accent for
-		// the active note, muted for the rest, hollow when the note is a leaf (colour is
-		// set in CSS). A note that forks trades that dot for the branch circle; see
-		// `attachBranchToggle`.
+		// Left gutter: the indentation guide rail and a dot marking the note, hollow when the
+		// note is a leaf (colour is set in CSS). A note that forks trades that dot for the
+		// branch circle; see `attachBranchToggle`.
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
 		marker.createDiv({ cls: "folgezettel-dot" });
+		this.attachIndexNames(marker, file);
 
 		this.renderTitleLink(row, file);
 		return marker;
@@ -713,7 +702,7 @@ export class FolgezettelView extends ItemView {
 	/**
 	 * A note linking here. The same row as the strand's — and the same `folgezettel-entry`
 	 * class, which is load-bearing twice over: the page preview centres itself on the nearest
-	 * such element (`attachHoverPreview`), and the bookmark colour is scoped to it.
+	 * such element (`attachHoverPreview`), and the index colour is scoped to it.
 	 *
 	 * What differs is the gutter. There is no rail (CSS), because these notes are not threaded
 	 * on anything — they are a set, not a sequence — and no dot, because a dot here would claim
@@ -724,22 +713,37 @@ export class FolgezettelView extends ItemView {
 	 */
 	private renderBacklinkEntry(parent: HTMLElement, file: TFile): void {
 		const row = parent.createDiv({
-			cls: `folgezettel-entry is-backlink${this.isBookmarked(file) ? " is-bookmarked" : ""}`,
+			cls: `folgezettel-entry is-backlink${this.isIndexed(file) ? " is-indexed" : ""}`,
 		});
 
 		const marker = row.createDiv({ cls: "folgezettel-marker" });
 		setIcon(marker.createSpan({ cls: "folgezettel-backlink-icon" }), BACKLINK_ICON);
+		this.attachIndexNames(marker, file);
 
 		this.renderTitleLink(row, file);
 	}
 
 	/**
-	 * Whether the note is bookmarked, and so takes the bookmark colour in the gutter. The
-	 * class goes on the *row*, not the icon, so the one rule covers whichever icon that row
-	 * ends up with — including the branch circle `attachBranchToggle` swaps in later.
+	 * Whether an index note links to the note, which then takes the index colour in the
+	 * gutter. The class goes on the *row*, not the icon, so the one rule covers whichever icon
+	 * that row ends up with — including the branch circle `attachBranchToggle` swaps in later.
 	 */
-	private isBookmarked(file: TFile): boolean {
-		return this.bookmarks.has(file.path);
+	private isIndexed(file: TFile): boolean {
+		return this.indexed.has(file.path);
+	}
+
+	/**
+	 * The names the index notes give `file` — the alias of each link — as the tooltip of its
+	 * gutter, one per line. It goes on the marker, not on the icon inside it, because the icon
+	 * is not final yet: `attachBranchToggle` empties the marker to trade the dot for the
+	 * circle, which takes the children and leaves the marker's own attributes alone. That
+	 * also gives the pointer the whole gutter cell to find instead of an 8px dot. A note no
+	 * link names gets no tooltip; its colour already says it is indexed. Touch has no hover,
+	 * so on mobile this never shows.
+	 */
+	private attachIndexNames(marker: HTMLElement, file: TFile): void {
+		const names = this.indexed.get(file.path);
+		if (names && names.length > 0) setTooltip(marker, names.join("\n"));
 	}
 
 	private setPreviewBranch(key: string, path: string): void {

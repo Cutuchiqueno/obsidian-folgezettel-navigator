@@ -69,13 +69,26 @@ The number lets you size up a fork without opening it, and the open circles keep
 that genuinely ends distinct from one the panel merely cut short at its limit. The note you
 are on is marked by its highlighted row; its marker is drawn like any other.
 
-A **bookmarked** note keeps the marker its role calls for and draws it in your accent
-colour instead — the one thing on the rail that uses it — so you can see at a glance where
-your bookmarks sit along the thread without losing what kind of note each one is. It
-follows Obsidian's core Bookmarks plugin (bookmarks inside groups included) and updates as
-you bookmark and unbookmark. A bookmark pointing at a *heading* inside a note does not
-count, matching Obsidian's own reading of which notes are bookmarked; with the Bookmarks
-plugin turned off, nothing changes.
+A note that an **index note** links to keeps the marker its role calls for and draws it in
+your accent colour instead — the one thing on the rail that uses it — so you can see at a
+glance which notes along the thread your indexes already reach, without losing what kind of
+note each one is. An index note is any note whose frontmatter says so, by default:
+
+```yaml
+---
+typ: index
+---
+```
+
+Only the links in the index note's text count (ordinary links and embeds, not other
+properties). The value is matched regardless of case, and also as one entry of a list such
+as `typ: [index, overview]`. Both the note type property and the index value can be changed
+under [Settings](#settings), and the colours update as you edit your index notes.
+
+Hover such a marker *(desktop)* to see what your index calls the note: the name after the
+`|` in its link, as in `[[Note|this name]]` — one per line when the note is linked more than
+once under different names. A note linked by its bare name has nothing more to show, so its
+marker shows no tooltip.
 
 Switch to another note and the panel redraws around it. By default it shows up to five
 notes on each side (configurable — see [Settings](#settings)). If the pane is too short for
@@ -103,8 +116,8 @@ thread, so there is no guide rail running through them.
 
 These entries behave exactly like the ones above: click to open (Ctrl/Cmd-click for a new
 tab), hover for the page preview, right-click (or long-press on touch) for the file menu, and
-a bookmarked note shows its icon in the bookmark colour. When nothing links to the note, the
-section — the rule with it — is simply not there.
+a note an index links to shows its icon in the accent colour. When nothing links to the note,
+the section — the rule with it — is simply not there.
 
 ## Junctions (branches)
 
@@ -215,6 +228,7 @@ the sequence without navigating to it first.
 | **Click** a note title | Opens the note; the panel redraws around it |
 | **Right-click** a note title *(long press on mobile)* | That note's menu: open it elsewhere, create or link a following note, rename, move, bookmark, delete, reveal |
 | **Hover** a title *(desktop)* | Obsidian's native page preview, following your Page preview setting — beside the sidebar, so it does not cover the sequence |
+| **Hover** the marker of an indexed note *(desktop)* | The names your index notes give it |
 | **Click** a junction's numbered circle | Expand / collapse the list of its branches, on the row below |
 | **Hover** a branch option *(desktop)* | Preview that branch, without committing to it |
 | **Click** a branch option *below* the active note | Take that branch (does **not** open the note) |
@@ -230,8 +244,8 @@ The plugin works on Obsidian Mobile. Everything is tap-driven: tap a title to op
 tap a junction's numbered circle to expand it, tap an option to take that branch. **Press and
 hold** a note for its file menu, the same one a right-click gives on the desktop — the press
 gives way to a scroll, so flicking through a long sequence still scrolls the panel. The
-hover-only previews (branch preview and page preview) are desktop affordances and are simply absent
-on touch — the rest of the workflow is identical.
+hover-only extras (branch preview, page preview, and the names an index gives a note) are
+desktop affordances and are simply absent on touch — the rest of the workflow is identical.
 
 ## A typical workflow
 
@@ -252,8 +266,11 @@ on touch — the rest of the workflow is identical.
 - **New note location** — the folder *Create following note* puts new notes in, with
   folder autocompletion. Leave it empty to create each note next to the note it
   continues.
+- **Note type property** and **Index value** — the frontmatter property that holds a
+  note's type, and the type that makes a note an index note (default `typ: index`), whose
+  linked notes are drawn in the accent colour. Clear either field to go back to its default.
 
-The first two apply immediately to any open panel.
+All but *New note location* apply immediately to any open panel.
 
 ## Installation
 

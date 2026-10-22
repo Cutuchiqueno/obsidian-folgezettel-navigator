@@ -18,6 +18,7 @@ import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFolder } from "o
 import type { SettingDefinitionItem } from "obsidian";
 import type FolgezettelPlugin from "./main";
 import { FOLGEZETTEL_KEY } from "./graph";
+import { INDEX_VALUE, NOTE_TYPE_KEY } from "./index-notes";
 
 export interface FolgezettelSettings {
 	/** Frontmatter property read for Folgezettel links. */
@@ -29,12 +30,18 @@ export interface FolgezettelSettings {
 	 * note being continued lives"; "/" is the vault root.
 	 */
 	newNoteFolder: string;
+	/** Frontmatter property that holds a note's type. */
+	noteTypeProperty: string;
+	/** Type, held in `noteTypeProperty`, that makes a note an index note. */
+	indexValue: string;
 }
 
 export const DEFAULT_SETTINGS: FolgezettelSettings = {
 	propertyName: FOLGEZETTEL_KEY,
 	maxSteps: 5,
 	newNoteFolder: "",
+	noteTypeProperty: NOTE_TYPE_KEY,
+	indexValue: INDEX_VALUE,
 };
 
 /**
@@ -56,6 +63,16 @@ const LABELS: Record<keyof FolgezettelSettings, { name: string; desc: string }> 
 	maxSteps: {
 		name: "Sequence length",
 		desc: "How many incoming and outgoing notes to show on each side of the active note.",
+	},
+	noteTypeProperty: {
+		name: "Note type property",
+		desc: "Frontmatter property that holds the type of a note.",
+	},
+	indexValue: {
+		name: "Index value",
+		desc:
+			"Note type that makes a note an index note. Notes an index note links to in its " +
+			"text are marked in your accent colour, and show the link's name on hover.",
 	},
 };
 
@@ -111,14 +128,32 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 					defaultValue: DEFAULT_SETTINGS.maxSteps,
 				},
 			},
+			{
+				...LABELS.noteTypeProperty,
+				control: {
+					type: "text",
+					key: "noteTypeProperty",
+					placeholder: NOTE_TYPE_KEY,
+					defaultValue: DEFAULT_SETTINGS.noteTypeProperty,
+				},
+			},
+			{
+				...LABELS.indexValue,
+				control: {
+					type: "text",
+					key: "indexValue",
+					placeholder: INDEX_VALUE,
+					defaultValue: DEFAULT_SETTINGS.indexValue,
+				},
+			},
 		];
 	}
 
 	/**
 	 * Persist what a declarative control changed. Overridden for two reasons: the
 	 * inherited version only writes the data file, while `saveSettings()` also re-renders
-	 * every open panel so a change shows immediately; and the two text fields need the
-	 * same normalizing the fallback below gives them.
+	 * every open panel so a change shows immediately; and the text fields need the same
+	 * normalizing the fallback below gives them.
 	 */
 	async setControlValue(key: string, value: unknown): Promise<void> {
 		const { settings } = this.plugin;
@@ -132,6 +167,12 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 				break;
 			case "maxSteps":
 				settings.maxSteps = Number(value);
+				break;
+			case "noteTypeProperty":
+				settings.noteTypeProperty = text(value).trim() || NOTE_TYPE_KEY;
+				break;
+			case "indexValue":
+				settings.indexValue = text(value).trim() || INDEX_VALUE;
 				break;
 			default:
 				return;
@@ -187,6 +228,32 @@ export class FolgezettelSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.maxSteps)
 					.onChange(async (value) => {
 						this.plugin.settings.maxSteps = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName(LABELS.noteTypeProperty.name)
+			.setDesc(LABELS.noteTypeProperty.desc)
+			.addText((text) =>
+				text
+					.setPlaceholder(NOTE_TYPE_KEY)
+					.setValue(this.plugin.settings.noteTypeProperty)
+					.onChange(async (value) => {
+						this.plugin.settings.noteTypeProperty = value.trim() || NOTE_TYPE_KEY;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName(LABELS.indexValue.name)
+			.setDesc(LABELS.indexValue.desc)
+			.addText((text) =>
+				text
+					.setPlaceholder(INDEX_VALUE)
+					.setValue(this.plugin.settings.indexValue)
+					.onChange(async (value) => {
+						this.plugin.settings.indexValue = value.trim() || INDEX_VALUE;
 						await this.plugin.saveSettings();
 					})
 			);

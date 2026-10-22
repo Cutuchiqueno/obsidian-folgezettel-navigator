@@ -3,6 +3,32 @@
 All notable changes to Folgezettel Navigator are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+**The accent colour on the rail marks indexed notes, not bookmarks.** A note keeps whatever
+marker it would have — dot, numbered branch circle, or an open circle at either end of the
+thread — and draws it in your accent colour when an *index note* links to it in its text.
+So you can see along a sequence which notes your indexes already reach. An index note is
+one whose frontmatter marks it as one, `typ: index` by default. Bookmarks no longer colour
+anything; the bookmark item in the right-click menu is unaffected.
+
+**The rail's circles no longer explain themselves on hover.** The numbered circle used to
+show "Show 3 branches", and the circle at the top end "Forks into 3 notes" or "Beginning of
+the structure". The only hover left in the gutter is the one below.
+
+### Added
+
+**See what your index calls a note.** Hover the marker of an indexed note to see the name
+its index gives it: the part after the `|` in the link, as in `[[Note|this name]]`. A note
+linked under several names lists them all, one per line; one linked by its bare name shows
+nothing extra.
+
+**Note type property and Index value settings.** The frontmatter property that holds a
+note's type, and the type that makes a note an index note — `typ` and `index` unless you
+change them. The value is matched regardless of case, and also as one entry of a list.
+
 ## [1.2.0] — 2026-10-13
 
 The panel stops being read-only. You can now grow a sequence from it, act on any note in it
