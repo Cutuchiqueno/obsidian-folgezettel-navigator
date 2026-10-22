@@ -637,9 +637,15 @@ strand hangs from the panel's top edge. The scrolling is one level up, on
 pane is too short, without letting the bar's arrival resize the content (see "The list hangs
 from the top of the panel"). Entries carry `is-incoming` /
 `is-active` / `is-outgoing` for styling only — there is no longer a container per side.
-Everything below a card is wrapped in a `.folgezettel-continuation` element set to
-`display: contents` (layout-transparent), so a hover preview can rebuild just that subtree
-without perturbing the strand's flex layout.
+Everything below a card is wrapped in a `.folgezettel-continuation` element, so a hover
+preview can rebuild just that subtree without perturbing the strand's layout. The wrapper is
+a flex column set up exactly as `.folgezettel-list` is (`flex: 0 0 auto`, `align-items:
+stretch`), which puts every row where it would sit as a direct child of the list — flex items
+never collapse margins, so an open menu's margin at the wrapper's edge adds up as it did
+between siblings. Measured with every fork open, nested wrappers and a preview: 67 rows, no
+position changed by as much as 0.01px. It was `display: contents`, layout-transparent by
+definition, until Obsidian's plugin review flagged that as only partially supported by the
+oldest Obsidian it checks against (1.6.5); do not bring it back.
 
 The backlinks section is separated by `.folgezettel-divider`: a rule `2em` wide, centred with
 `margin: var(--size-4-4) auto`, at `--border-width` in `--hr-color` — the colour every border

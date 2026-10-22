@@ -3,6 +3,14 @@
 All notable changes to Folgezettel Navigator are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Findings from Obsidian's plugin review.** The panel no longer uses `display: contents`,
+  which the review flags as only partially supported by older Obsidian versions. Nothing
+  changes on screen.
+
 ## [1.3.0] — 2026-10-22
 
 The accent colour on the rail now follows your index notes instead of your bookmarks: it

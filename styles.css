@@ -55,10 +55,17 @@
 	justify-content: flex-start;
 }
 
-/* Layout-transparent wrapper: everything below a card lives here so hover previews
-   can rebuild it without disturbing the strand's flex layout. */
+/* Everything below a card lives here, so a hover preview can rebuild just that subtree.
+   It is a flex column set up exactly as the list is — stretched across, as tall as its
+   rows — so a row sits where it would as a direct child of the list: flex items never
+   collapse their margins, inside the wrapper or across its edge, so it adds nothing to the
+   spacing either. It used to be `display: contents`, which is layout-transparent by
+   definition, but Obsidian's plugin review flags that as only partially supported. */
 .folgezettel-continuation {
-	display: contents;
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
 }
 
 /* A note in the sequence — modeled on the File Explorer nav item. */
