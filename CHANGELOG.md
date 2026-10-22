@@ -3,22 +3,18 @@
 All notable changes to Folgezettel Navigator are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] — 2026-10-22
 
-### Changed
-
-**The accent colour on the rail marks indexed notes, not bookmarks.** A note keeps whatever
-marker it would have — dot, numbered branch circle, or an open circle at either end of the
-thread — and draws it in your accent colour when an *index note* links to it in its text.
-So you can see along a sequence which notes your indexes already reach. An index note is
-one whose frontmatter marks it as one, `typ: index` by default. Bookmarks no longer colour
-anything; the bookmark item in the right-click menu is unaffected.
-
-**The rail's circles no longer explain themselves on hover.** The numbered circle used to
-show "Show 3 branches", and the circle at the top end "Forks into 3 notes" or "Beginning of
-the structure". The only hover left in the gutter is the one below.
+The accent colour on the rail now follows your index notes instead of your bookmarks: it
+shows which notes along a sequence an index already reaches, and a hover tells you what the
+index calls them.
 
 ### Added
+
+**Notes an index links to stand out on the rail.** A note keeps whatever marker it would
+have — dot, numbered branch circle, or an open circle at either end of the thread — and
+draws it in your accent colour when an *index note* links to it in its text. An index note
+is one whose frontmatter marks it as one, `typ: index` by default.
 
 **See what your index calls a note.** Hover the marker of an indexed note to see the name
 its index gives it: the part after the `|` in the link, as in `[[Note|this name]]`. A note
@@ -28,6 +24,14 @@ nothing extra.
 **Note type property and Index value settings.** The frontmatter property that holds a
 note's type, and the type that makes a note an index note — `typ` and `index` unless you
 change them. The value is matched regardless of case, and also as one entry of a list.
+
+### Changed
+
+- **Bookmarks no longer colour the rail.** The accent belongs to indexed notes now (above).
+  The bookmark item in the right-click menu is unaffected.
+- **The rail's circles no longer explain themselves on hover.** The numbered circle used to
+  show "Show 3 branches", and the circle at the top end "Forks into 3 notes" or "Beginning
+  of the structure". The only hover left in the gutter is the names of indexed notes.
 
 ## [1.2.0] — 2026-10-13
 

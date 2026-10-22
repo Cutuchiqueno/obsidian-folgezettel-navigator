@@ -1,6 +1,6 @@
 {
 	"name": "folgezettel-navigator",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"description": "Visualize and navigate a Luhmann-style Folgezettel note sequence in a sidebar panel.",
 	"main": "main.js",
 	"scripts": {
