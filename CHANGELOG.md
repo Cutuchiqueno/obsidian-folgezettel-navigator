@@ -9,7 +9,9 @@ All notable changes to Folgezettel Navigator are documented here. This project f
 
 - **Findings from Obsidian's plugin review.** The panel no longer uses `display: contents`,
   which the review flags as only partially supported by older Obsidian versions. Nothing
-  changes on screen.
+  changes on screen. And the release files are now built and attested on GitHub, so you can
+  verify that they were built from this repository:
+  `gh attestation verify main.js --repo Cutuchiqueno/obsidian-folgezettel-navigator`.
 
 ## [1.3.0] — 2026-10-22
 

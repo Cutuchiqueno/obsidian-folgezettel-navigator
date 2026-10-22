@@ -61,13 +61,24 @@ version" and updates cannot be installed. That happened from 2026-09-08 to 2026-
    release up by the bare version.
 2. **Fast-forward `main` and tag it:** `git fetch . develop:main`, then `git tag X.Y.Z main`
    — a plain tag, no `v`, as every earlier release has.
-3. **Publish, release before `main`:** push `develop` and the tag; create the release from
-   the tag (`gh release create X.Y.Z --verify-tag`) with the `main.js`, `manifest.json` and
-   `styles.css` built from it, titled "Version X.Y.Z - Feature Release" (or what fits), and
-   the version's `CHANGELOG.md` section as notes, headings raised one level. **Only then
-   push `main`.**
-4. Check that the release is published (not a draft) and marked latest, and that its
-   assets download identical to the local build.
+3. **Publish, release before `main`:** push `develop` and the tag. The tag push runs
+   `.github/workflows/release.yml`, which builds `main.js` and `styles.css` from the tag,
+   **attests** all three assets, and creates a **draft** release carrying them, titled
+   "Version X.Y.Z", with the version's `CHANGELOG.md` section as notes, headings raised one
+   level. Follow it with `gh run watch`; a run that fails leaves no release behind, only the
+   tag. Check the draft, then publish it under its final title:
+   `gh release edit X.Y.Z --title "Version X.Y.Z - Feature Release" --draft=false --latest`
+   (or whatever title fits). **Only then push `main`.**
+4. Check that the release is published (not a draft) and marked latest, that its assets
+   download identical to the local build — the build is reproducible, so a difference means
+   the tag is not what was built locally — and that they verify:
+   `gh attestation verify <file> --repo Cutuchiqueno/obsidian-folgezettel-navigator`.
+
+The assets are built by the workflow rather than uploaded from here because an attestation
+is GitHub's signed statement that **that run** built a file with a given digest from the
+tagged commit; Obsidian's plugin review recommends it, and a locally built file cannot carry
+one. Releases up to 1.3.0 were uploaded by hand and are not attested. The workflow's actions
+are pinned to full commit SHAs, and it restores no dependency cache.
 
 ## Architecture
 

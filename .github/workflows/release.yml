@@ -1,0 +1,78 @@
+# Builds a release's assets from its version tag, attests their provenance, and attaches them
+# to a draft release. Publishing the draft stays a manual step — see "Releases" in CLAUDE.md.
+#
+# The assets have to be built here, not locally: an attestation is GitHub's signed statement
+# that *this workflow run* built a file with a given digest from the tagged commit, which is
+# what lets a user check that the release came from this repository with
+# `gh attestation verify main.js --repo Cutuchiqueno/obsidian-folgezettel-navigator`.
+#
+# Actions are pinned to full commit SHAs, since this job can write releases and sign
+# attestations; the comment names the release each SHA belongs to.
+name: Release
+
+on:
+  push:
+    # A plain version, no `v`: Obsidian looks the release up by the bare version.
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      # Create the draft release and upload its assets.
+      contents: write
+      # Mint the OIDC token the Sigstore signing certificate is issued against.
+      id-token: write
+      # Store the attestation, and its artifact record, with the repository.
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Before building anything: a release without its changelog section is a slip in the
+      # procedure, and failing here costs nothing. The notes are that section with every
+      # heading raised one level, as on every release so far.
+      - name: Extract release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          awk -v heading="## [$TAG]" '
+            index($0, heading) == 1 { on = 1; print; next }
+            on && /^## \[/ { exit }
+            on
+          ' CHANGELOG.md | sed -E 's/^#(#+) /\1 /' > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::CHANGELOG.md has no section for $TAG"
+            exit 1
+          fi
+
+      # No dependency cache, deliberately: a release build restores nothing an earlier run
+      # could have left behind.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - run: npm ci
+      - run: npm run build
+
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+            --title "Version $TAG" --notes-file "$RUNNER_TEMP/notes.md" \
+            main.js manifest.json styles.css
