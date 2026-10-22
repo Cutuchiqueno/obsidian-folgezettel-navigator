@@ -279,7 +279,10 @@ All but *New note location* apply immediately to any open panel.
 
 **Manually:** download `main.js`, `manifest.json` and `styles.css` from a release, put
 them in `<vault>/.obsidian/plugins/folgezettel-navigator/`, then enable the plugin under
-Settings → Community plugins.
+Settings → Community plugins. From 1.3.1 on, the release files are built and attested on
+GitHub, so you can check that they were built from this repository with
+`gh attestation verify main.js --repo Cutuchiqueno/obsidian-folgezettel-navigator` (and the
+same for the other two).
 
 ## Development
 

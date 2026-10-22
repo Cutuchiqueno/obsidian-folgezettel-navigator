@@ -3,14 +3,17 @@
 All notable changes to Folgezettel Navigator are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.1] — 2026-10-22
+
+Two findings from Obsidian's plugin review on 1.3.0. Nothing changes in the panel.
 
 ### Fixed
 
-- **Findings from Obsidian's plugin review.** The panel no longer uses `display: contents`,
-  which the review flags as only partially supported by older Obsidian versions. Nothing
-  changes on screen. And the release files are now built and attested on GitHub, so you can
-  verify that they were built from this repository:
+- **No more `display: contents`.** The review flags it as only partially supported by
+  older Obsidian versions. The panel now lays out the same rows without it, in exactly the
+  same places.
+- **The release files can be verified.** They are now built and attested on GitHub, so you
+  can check that a download was built from this repository:
   `gh attestation verify main.js --repo Cutuchiqueno/obsidian-folgezettel-navigator`.
 
 ## [1.3.0] — 2026-10-22
